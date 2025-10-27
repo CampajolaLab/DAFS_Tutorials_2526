@@ -68,6 +68,22 @@ The entire application lives in `index.html` with embedded styles and JavaScript
 - For true multi-device: serve via simple HTTP server (e.g., `python -m http.server`)
 - No compilation, transpilation, or bundling needed
 
+### Optional Online Mode (Server-backed)
+- Minimal Node.js server in `server/server.js` keeps a shared in-memory game state and broadcasts updates via SSE
+- UIs:
+  - Admin: `admin-remote.html` (served at `/admin`)
+  - Client: `client-remote.html` (served at `/client`)
+- API surface (JSON):
+  - `GET /api/state` → full `gameState`
+  - `GET /api/events` (SSE) → pushes `{ type: 'state', state }` on every change
+  - `POST /api/addPlayer { name, count }`
+  - `POST /api/toggleReveal { name }`
+  - `POST /api/submitOrder { playerName, side, price, size }` (applies tighten-or-trade, matches, updates positions)
+  - `POST /api/cancelOrders { playerName }`
+  - `POST /api/reset {}`
+  - `POST /api/settle {}`
+- Source of truth moves from `localStorage` to the server. Clients subscribe to `/api/events` and re-render on each state push.
+
 ### Debugging
 - All state in `localStorage.getItem('orderBookGame')`
 - Console: `JSON.parse(localStorage.getItem('orderBookGame'))` to inspect

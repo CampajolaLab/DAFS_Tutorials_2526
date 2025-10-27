@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Order Book Mechanics - Client (Remote)</title>
+  <style>
+    body { font-family: 'Courier New', monospace; background:#1a1a2e; color:#eee; padding:20px; }
+    .container { max-width: 900px; margin:0 auto; }
+    h1 { text-align:center; color:#00d4ff; margin-bottom:20px; font-size:2em; }
+    .panel { background:#16213e; border:2px solid #0f3460; border-radius:8px; padding:20px; margin-bottom:20px; }
+    .panel h2 { color:#00d4ff; margin-bottom:15px; font-size:1.3em; border-bottom:2px solid #0f3460; padding-bottom:10px; }
+    .order-book-header, .order-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:0; }
+    .order-book-header { padding:8px; background:#0f3460; font-weight:bold; margin-bottom:5px; border-radius:4px; }
+    .order-row { padding:6px 8px; margin:2px 0; border-radius:3px; }
+    .bid-row { background:rgba(0,255,100,0.1); }
+    .ask-row { background:rgba(255,50,50,0.1); }
+    .bid-price { color:#00ff64; font-weight:bold; }
+    .ask-price { color:#ff3232; font-weight:bold; }
+    .spread-row { text-align:center; padding:10px; color:#888; font-style:italic; margin:5px 0; }
+    .input-group { margin:15px 0; }
+    .input-group label { display:block; margin-bottom:5px; color:#00d4ff; font-weight:bold; }
+    .input-group input, .input-group select { width:100%; padding:10px; background:#0f3460; border:1px solid #00d4ff; color:#eee; border-radius:4px; font-family:'Courier New', monospace; font-size:1em; }
+    button { background:#00d4ff; color:#16213e; border:none; padding:12px 24px; font-weight:bold; cursor:pointer; border-radius:4px; font-size:1em; margin:5px 5px 5px 0; transition:all 0.3s; }
+    button:hover { background:#00a8cc; transform:translateY(-2px); }
+    button:active { transform:translateY(0); }
+    button.cancel-btn { background:#ff3232; color:white; }
+    button.cancel-btn:hover { background:#cc0000; }
+    .positions-table { margin-top:10px; }
+    .position-row { display:grid; grid-template-columns:2fr 1fr 1fr; padding:8px; margin:3px 0; background:rgba(255,255,255,0.05); border-radius:3px; }
+    .position-header { font-weight:bold; background:#0f3460; color:#00d4ff; }
+    .profit { color:#00ff64; }
+    .loss { color:#ff3232; }
+    .info-box { background:rgba(0,212,255,0.1); border-left:4px solid #00d4ff; padding:12px; margin:15px 0; border-radius:4px; }
+    .sibling-list { display:flex; flex-wrap:wrap; gap:10px; margin:15px 0; }
+    .sibling-item { background:rgba(255,255,255,0.1); padding:10px 15px; border-radius:4px; font-weight:bold; }
+    .sibling-hidden { background:rgba(255,255,255,0.05); color:#555; }
+    #message { position:fixed; top:20px; right:20px; padding:15px 25px; border-radius:4px; font-weight:bold; display:none; z-index:1000; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎮 Order Book Trading Game — Client (Remote)</h1>
+    <div id="message"></div>
+
+    <div class="panel">
+      <h2>📖 Order Book</h2>
+      <div class="info-box"><strong>Live:</strong> Real-time updates from the server. Place orders below.</div>
+      <div class="order-book">
+        <div class="order-book-header"><div>Price</div><div>Size</div><div>Player</div></div>
+        <div id="orderBookDisplay"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>🎛️ Player Controls</h2>
+      <div class="input-group"><label>Your Name:</label><input type="text" id="myPlayerName" placeholder="Enter your name"></div>
+      <div class="input-group"><label>Order Type:</label><select id="orderType"><option value="bid">Bid (Buy)</option><option value="ask">Ask (Sell)</option></select></div>
+      <div class="input-group"><label>Price:</label><input type="number" id="orderPrice" step="0.01" placeholder="Order price"></div>
+      <div class="input-group"><label>Size:</label><input type="number" id="orderSize" min="1" value="1" placeholder="Order size"></div>
+      <button onclick="submitOrder()">📤 Submit Order</button>
+      <button onclick="cancelMyOrders()" class="cancel-btn">❌ Cancel My Orders</button>
+    </div>
+
+    <div class="panel">
+      <h2>📊 Positions</h2>
+      <div class="positions-table" id="positionsTable"></div>
+      <div class="panel">
+        <h2>👥 Players & Sibling Counts</h2>
+        <div class="sibling-list" id="siblingList"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let gameState = { players:{}, orders:[], trades:[], positions:{}, orderIdCounter:1, settledPrice:null };
+
+    async function api(path, method='GET', body) {
+      const res = await fetch(path, { method, headers: { 'Content-Type':'application/json' }, body: body ? JSON.stringify(body) : undefined });
+      const data = await res.json().catch(()=>({}));
+      if (!res.ok) throw data; return data;
+    }
+
+    function connectSSE() {
+      const ev = new EventSource('/api/events');
+      ev.onmessage = (msg) => {
+        try { const payload = JSON.parse(msg.data); if (payload.type==='state') { gameState = payload.state; updateDisplay(); } }
+        catch(_){}
+      };
+    }
+
+    function showMessage(text, type='info') {
+      const msg = document.getElementById('message');
+      msg.textContent = text; msg.style.display = 'block';
+      if (type==='error'){ msg.style.background='#ff3232'; msg.style.color='white'; }
+      else if (type==='success'){ msg.style.background='#00ff64'; msg.style.color='#16213e'; }
+      else { msg.style.background='#00d4ff'; msg.style.color='#16213e'; }
+      setTimeout(()=>{ msg.style.display='none'; }, 3000);
+    }
+
+    async function submitOrder() {
+      const playerName = document.getElementById('myPlayerName').value.trim();
+      const side = document.getElementById('orderType').value;
+      const price = parseFloat(document.getElementById('orderPrice').value);
+      const size = parseInt(document.getElementById('orderSize').value);
+      if (!playerName) return showMessage('Please enter your name','error');
+      if (!Number.isFinite(price) || price <= 0) return showMessage('Please enter a valid price','error');
+      if (!Number.isInteger(size) || size <= 0) return showMessage('Please enter a valid size','error');
+      try { const r = await api('/api/submitOrder','POST',{ playerName, side, price, size });
+        if ((r.trades||[]).length) showMessage(`Order executed! ${r.trades.length} trade(s)`,'success');
+        else showMessage(`Order placed in book at ${price.toFixed(2)}`,'success');
+        document.getElementById('orderPrice').value=''; document.getElementById('orderSize').value='';
+      } catch(e){
+        if (e && e.error === 'Tighten or trade') {
+          const bb = e.bestBid!=null ? e.bestBid.toFixed(2) : 'N/A';
+          const ba = e.bestAsk!=null ? e.bestAsk.toFixed(2) : 'N/A';
+          showMessage(`Order rejected! Improve best ${side} or trade. Best bid: ${bb}, Best ask: ${ba}`,'error');
+        } else showMessage(e.error || 'Error submitting order','error');
+      }
+    }
+
+    async function cancelMyOrders() {
+      const playerName = document.getElementById('myPlayerName').value.trim();
+      if (!playerName) return showMessage('Please enter your name','error');
+      try { const r = await api('/api/cancelOrders','POST',{ playerName }); showMessage(`Cancelled ${r.cancelled} order(s)`,'success'); }
+      catch(e){ showMessage(e.error || 'Error cancelling','error'); }
+    }
+
+    function getBestBidAsk() {
+      const bids = gameState.orders.filter(o=>o.side==='bid').sort((a,b)=>b.price-a.price || a.id-b.id);
+      const asks = gameState.orders.filter(o=>o.side==='ask').sort((a,b)=>a.price-b.price || a.id-b.id);
+      return { bestBid: bids[0]?.price ?? null, bestAsk: asks[0]?.price ?? null };
+    }
+
+    function updateDisplay() { updateOrderBook(); updatePositionsTable(); updateSiblingList(); }
+
+    function updateOrderBook() {
+      const c = document.getElementById('orderBookDisplay'); c.innerHTML = '';
+      const bids = gameState.orders.filter(o=>o.side==='bid').sort((a,b)=>b.price-a.price || a.id-b.id);
+      const asks = gameState.orders.filter(o=>o.side==='ask').sort((a,b)=>a.price-b.price || a.id-b.id);
+      const myName = document.getElementById('myPlayerName').value.trim();
+      for (let i=asks.length-1; i>=0; i--) {
+        const o = asks[i]; const div = document.createElement('div');
+        div.className = 'order-row ask-row' + (o.player===myName ? ' my-order' : '');
+        div.innerHTML = `<div class="ask-price">${o.price.toFixed(2)}</div><div>${o.size}</div><div>${o.player}</div>`;
+        c.appendChild(div);
+      }
+      const { bestBid, bestAsk } = getBestBidAsk();
+      const spread = (bestBid!=null && bestAsk!=null) ? (bestAsk - bestBid).toFixed(2) : 'N/A';
+      const spreadDiv = document.createElement('div'); spreadDiv.className = 'spread-row'; spreadDiv.textContent = `--- Spread: ${spread} ---`; c.appendChild(spreadDiv);
+      for (const o of bids) {
+        const div = document.createElement('div');
+        div.className = 'order-row bid-row' + (o.player===myName ? ' my-order' : '');
+        div.innerHTML = `<div class="bid-price">${o.price.toFixed(2)}</div><div>${o.size}</div><div>${o.player}</div>`;
+        c.appendChild(div);
+      }
+      if (gameState.orders.length===0) c.innerHTML = '<div class="spread-row">No orders in book</div>';
+    }
+
+    function calculatePnL(name) {
+      const pos = gameState.positions[name]; if (!pos) return { realized:0, unrealized:0, total:0 };
+      const realized = pos.realizedPnL; let unrealized = 0;
+      if (pos.quantity !== 0 && gameState.settledPrice !== null) {
+        const avgPrice = pos.quantity > 0 ? pos.totalCost/pos.quantity : -pos.totalCost/Math.abs(pos.quantity);
+        unrealized = pos.quantity * (gameState.settledPrice - avgPrice);
+      }
+      return { realized, unrealized, total: realized + unrealized };
+    }
+
+    function updatePositionsTable() {
+      const c = document.getElementById('positionsTable');
+      c.innerHTML = `<div class=\"position-row position-header\"><div>Player</div><div>Position</div><div>P&L</div></div>`;
+      Object.keys(gameState.positions).forEach(name => {
+        const pos = gameState.positions[name];
+        const pnl = calculatePnL(name);
+        const div = document.createElement('div');
+        div.className = 'position-row';
+        div.innerHTML = `<div>${name}</div><div>${pos.quantity}</div><div class=\"${pnl.total>=0?'profit':'loss'}\">$${pnl.total.toFixed(2)}</div>`;
+        c.appendChild(div);
+      });
+      if (gameState.settledPrice !== null) {
+        const info = document.createElement('div'); info.className = 'info-box';
+        info.innerHTML = `<strong>Contract Settled at ${gameState.settledPrice}</strong> (sum of all sibling counts)`; c.appendChild(info);
+      }
+    }
+
+    function updateSiblingList() {
+      const c = document.getElementById('siblingList'); c.innerHTML = '';
+      Object.keys(gameState.players).forEach(name => {
+        const p = gameState.players[name];
+        const div = document.createElement('div');
+        div.className = p.revealed ? 'sibling-item' : 'sibling-item sibling-hidden';
+        div.textContent = p.revealed ? `${name}: ${p.siblingCount}` : `${name}: ???`;
+        c.appendChild(div);
+      });
+    }
+
+    (async function init(){
+      try { const init = await api('/api/state'); gameState = init.state || gameState; } catch(_){}
+      updateDisplay();
+      connectSSE();
+    })();
+  </script>
+</body>
+</html>

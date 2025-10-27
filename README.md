@@ -6,6 +6,23 @@ An interactive educational tool for teaching limit order book mechanics.
 
 **[Open the Game](index.html)** | **[Read the Instructions](ORDER_BOOK_GAME.md)**
 
+### Online (Server) Mode
+This repo now includes an optional tiny Node.js server for multi-user play over the internet. It keeps a shared in-memory game state and pushes updates to all connected clients in real-time via Server-Sent Events.
+
+Quick start on a machine with Node.js installed:
+
+1. Start the server
+	- Run from the `server/` folder: `node server.js` (default port 8080)
+2. Open the Admin UI (on the server machine or remotely)
+	- http://<server-host>:8080/admin
+3. Share the Client URL with players
+	- http://<server-host>:8080/client
+
+Notes
+- No external dependencies are required for the server (built-in Node modules only)
+- State is in-memory; restarting the server clears the game
+- Admin and Client UIs are single-file pages (`admin-remote.html`, `client-remote.html`) that talk to the server via `/api/*` and receive live updates via `/api/events`
+
 ### Features
 - Real-time limit order book with bid/offer display
 - "Tighten or trade" rule enforcement
@@ -13,6 +30,7 @@ An interactive educational tool for teaching limit order book mechanics.
 - Admin panel for game management
 - Contract settlement based on sibling counts
 - Multi-device synchronization via localStorage
+  - For true internet multi-user play, use the included Node server (Online Mode)
 
 ### Quick Start
 1. Open `index.html` in your web browser
