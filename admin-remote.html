@@ -80,13 +80,27 @@
 
   <script>
     let gameState = { players:{}, orders:[], trades:[], positions:{}, orderIdCounter:1, settledPrice:null };
+    let adminToken = sessionStorage.getItem('adminToken') || '';
 
     // Networking helpers
     async function api(path, method='GET', body) {
-      const res = await fetch(path, { method, headers: { 'Content-Type':'application/json' }, body: body ? JSON.stringify(body) : undefined });
+      const headers = { 'Content-Type':'application/json' };
+      if (adminToken && (path.includes('addPlayer') || path.includes('toggleReveal') || path.includes('reset') || path.includes('settle'))) {
+        headers['Authorization'] = `Bearer ${adminToken}`;
+      }
+      const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
       const data = await res.json().catch(()=>({}));
       if (!res.ok) throw data;
       return data;
+    }
+
+    function promptForToken() {
+      const token = prompt('Enter admin token (shown in server console on startup):');
+      if (token) {
+        adminToken = token.trim();
+        sessionStorage.setItem('adminToken', adminToken);
+        showMessage('Admin token saved for this session', 'success');
+      }
     }
 
     function connectSSE() {
@@ -120,20 +134,35 @@
       if (!name) return showMessage('Please enter a player name','error');
       if (isNaN(count) || count < 0) return showMessage('Please enter a valid sibling count','error');
       try { await api('/api/addPlayer','POST',{name, count}); showMessage(`Player ${name} added`,'success'); document.getElementById('playerName').value=''; document.getElementById('siblingCount').value=''; }
-      catch (e) { showMessage(e.error || 'Error adding player','error'); }
+      catch (e) { 
+        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        showMessage(e.error || 'Error adding player','error'); 
+      }
     }
 
     async function resetGame() {
       if (!confirm('Are you sure you want to reset the entire game?')) return;
-      try { await api('/api/reset','POST'); showMessage('Game reset!','success'); } catch(e){ showMessage(e.error || 'Error resetting','error'); }
+      try { await api('/api/reset','POST'); showMessage('Game reset!','success'); } 
+      catch(e){ 
+        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        showMessage(e.error || 'Error resetting','error'); 
+      }
     }
 
     async function settleContract() {
-      try { const r = await api('/api/settle','POST'); showMessage(`Contract settled at ${r.settledPrice}`,'success'); } catch(e){ showMessage(e.error || 'Error settling','error'); }
+      try { const r = await api('/api/settle','POST'); showMessage(`Contract settled at ${r.settledPrice}`,'success'); } 
+      catch(e){ 
+        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        showMessage(e.error || 'Error settling','error'); 
+      }
     }
 
     async function toggleReveal(name) {
-      try { await api('/api/toggleReveal','POST',{ name }); } catch(e){ showMessage(e.error || 'Error toggling reveal','error'); }
+      try { await api('/api/toggleReveal','POST',{ name }); } 
+      catch(e){ 
+        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        showMessage(e.error || 'Error toggling reveal','error'); 
+      }
     }
 
     // Player actions
@@ -252,6 +281,13 @@
       try { const init = await api('/api/state'); gameState = init.state || gameState; } catch(_){}
       updateDisplay();
       connectSSE();
+      // Prompt for token if not set
+      if (!adminToken) {
+        setTimeout(() => {
+          const tokenPrompt = confirm('Admin token required for game management. Click OK to enter token now.');
+          if (tokenPrompt) promptForToken();
+        }, 500);
+      }
     })();
   </script>
 </body>

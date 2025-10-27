@@ -12,18 +12,31 @@ This repo now includes an optional tiny Node.js server for multi-user play over 
 Quick start on a machine with Node.js installed:
 
 1. Start the server
-	- Run from the `server/` folder: `node server.js` (default port 8080)
+   ```bash
+   cd server
+   node server.js
+   # Or specify a custom port:
+   node server.js --port 3000
+   # Or via environment variable:
+   PORT=3000 node server.js
+   ```
+   **Important:** The server generates a random admin token on startup and displays it in the console. Copy this token - you'll need it to access admin features.
+
 2. Open the Admin UI (on the server machine or remotely)
-	- http://<server-host>:8080/admin
+   - http://<server-host>:8080/admin
+   - When prompted, paste the admin token from the server console
+   - The token is saved in your browser session (sessionStorage)
+
 3. Share the Client URL with players
-	- http://<server-host>:8080/client
+   - http://<server-host>:8080/client
+   - Players don't need the admin token (they can only submit/cancel orders)
 
 Notes
+- **Security:** Admin endpoints (add player, toggle reveal, reset, settle) require the admin token via `Authorization: Bearer <token>` header
+- **Port selection:** Default is 8080; override with `--port` flag or `PORT` environment variable
 - No external dependencies are required for the server (built-in Node modules only)
-- State is in-memory; restarting the server clears the game
-- Admin and Client UIs are single-file pages (`admin-remote.html`, `client-remote.html`) that talk to the server via `/api/*` and receive live updates via `/api/events`
-
-### Features
+- State is in-memory; restarting the server clears the game and generates a new admin token
+- Admin and Client UIs are single-file pages (`admin-remote.html`, `client-remote.html`) that talk to the server via `/api/*` and receive live updates via `/api/events`### Features
 - Real-time limit order book with bid/offer display
 - "Tighten or trade" rule enforcement
 - Player position tracking and P&L calculation

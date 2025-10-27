@@ -5,8 +5,29 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
+const crypto = require('crypto');
 
-const PORT = process.env.PORT || 8080;
+// Parse command line args for port (e.g., node server.js --port 3000)
+function parseArgs() {
+  const args = process.argv.slice(2);
+  let port = process.env.PORT || 8080;
+  for (let i = 0; i < args.length; i++) {
+    if ((args[i] === '--port' || args[i] === '-p') && args[i + 1]) {
+      port = parseInt(args[i + 1], 10);
+      if (isNaN(port)) port = 8080;
+    }
+  }
+  return { port };
+}
+
+const { port: PORT } = parseArgs();
+
+// Generate random admin token on startup
+const ADMIN_TOKEN = crypto.randomBytes(16).toString('hex');
+console.log('\n' + '='.repeat(60));
+console.log('ADMIN TOKEN (save this for admin UI):');
+console.log(ADMIN_TOKEN);
+console.log('='.repeat(60) + '\n');
 
 // --- In-memory Game State (same shape as client) ---
 let gameState = {
@@ -40,6 +61,18 @@ function sendJSON(res, code, obj) {
 }
 
 function notFound(res) { res.writeHead(404); res.end('Not found'); }
+
+function unauthorized(res) {
+  res.writeHead(401, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: 'Unauthorized - invalid admin token' }));
+}
+
+function checkAdminAuth(req) {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return false;
+  const token = authHeader.replace(/^Bearer\s+/i, '');
+  return token === ADMIN_TOKEN;
+}
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -219,6 +252,7 @@ const server = http.createServer(async (req, res) => {
 
   // API: add player
   if (req.method === 'POST' && pathname === '/api/addPlayer') {
+    if (!checkAdminAuth(req)) return unauthorized(res);
     try {
       const { name, count } = await readBody(req);
       if (!name || typeof count !== 'number' || count < 0) return sendJSON(res, 400, { error: 'Invalid input' });
@@ -233,6 +267,7 @@ const server = http.createServer(async (req, res) => {
 
   // API: toggle reveal
   if (req.method === 'POST' && pathname === '/api/toggleReveal') {
+    if (!checkAdminAuth(req)) return unauthorized(res);
     try {
       const { name } = await readBody(req);
       if (!name || !gameState.players[name]) return sendJSON(res, 400, { error: 'Invalid player' });
@@ -283,6 +318,7 @@ const server = http.createServer(async (req, res) => {
 
   // API: reset
   if (req.method === 'POST' && pathname === '/api/reset') {
+    if (!checkAdminAuth(req)) return unauthorized(res);
     gameState = { players: {}, orders: [], trades: [], positions: {}, orderIdCounter: 1, settledPrice: null };
     version++;
     sendJSON(res, 200, { ok: true });
@@ -292,6 +328,7 @@ const server = http.createServer(async (req, res) => {
 
   // API: settle
   if (req.method === 'POST' && pathname === '/api/settle') {
+    if (!checkAdminAuth(req)) return unauthorized(res);
     const result = settleContract();
     if (result && result.error) return sendJSON(res, 400, result);
     version++;
