@@ -26,15 +26,27 @@
     button:active { transform:translateY(0); }
     button.cancel-btn { background:#ff3232; color:white; }
     button.cancel-btn:hover { background:#cc0000; }
+    button.logout-btn { background:#ff8800; color:white; }
+    button.logout-btn:hover { background:#cc6600; }
     .positions-table { margin-top:10px; }
     .position-row { display:grid; grid-template-columns:2fr 1fr 1fr; padding:8px; margin:3px 0; background:rgba(255,255,255,0.05); border-radius:3px; }
     .position-header { font-weight:bold; background:#0f3460; color:#00d4ff; }
     .profit { color:#00ff64; }
     .loss { color:#ff3232; }
     .info-box { background:rgba(0,212,255,0.1); border-left:4px solid #00d4ff; padding:12px; margin:15px 0; border-radius:4px; }
+    .warning-box { background:rgba(255,136,0,0.1); border-left:4px solid #ff8800; padding:12px; margin:15px 0; border-radius:4px; }
     .sibling-list { display:flex; flex-wrap:wrap; gap:10px; margin:15px 0; }
     .sibling-item { background:rgba(255,255,255,0.1); padding:10px 15px; border-radius:4px; font-weight:bold; }
     .sibling-hidden { background:rgba(255,255,255,0.05); color:#555; }
+    .player-badge { display:inline-block; background:#00d4ff; color:#16213e; padding:8px 16px; border-radius:4px; font-weight:bold; margin:10px 0; }
+    .stats-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin:15px 0; }
+    .stat-box { background:rgba(255,255,255,0.05); padding:15px; border-radius:4px; text-align:center; }
+    .stat-box .label { color:#888; font-size:0.85em; margin-bottom:5px; }
+    .stat-box .value { font-size:1.5em; font-weight:bold; color:#00d4ff; }
+    .stat-box.revealed { border-left:3px solid #00ff64; }
+    .stat-box.hidden-stat { border-left:3px solid #ff3232; }
+    .stat-box.total { border-left:3px solid #00d4ff; }
+    .is-hidden { display:none; }
     #message { position:fixed; top:20px; right:20px; padding:15px 25px; border-radius:4px; font-weight:bold; display:none; z-index:1000; }
   </style>
 </head>
@@ -54,12 +66,42 @@
 
     <div class="panel">
       <h2>🎛️ Player Controls</h2>
-      <div class="input-group"><label>Your Name:</label><input type="text" id="myPlayerName" placeholder="Enter your name"></div>
-      <div class="input-group"><label>Order Type:</label><select id="orderType"><option value="bid">Bid (Buy)</option><option value="ask">Ask (Sell)</option></select></div>
-      <div class="input-group"><label>Price:</label><input type="number" id="orderPrice" step="0.01" placeholder="Order price"></div>
-      <div class="info-box" style="font-size:0.9em; margin:10px 0;">Order size is fixed at <strong>1 contract</strong></div>
-      <button onclick="submitOrder()">📤 Submit Order</button>
-      <button onclick="cancelMyOrders()" class="cancel-btn">❌ Cancel My Orders</button>
+      
+      <!-- Login Section -->
+      <div id="loginSection">
+        <div class="info-box">Please enter your details to join the game</div>
+        <div class="input-group">
+          <label>Your Name:</label>
+          <input type="text" id="loginName" placeholder="Enter your name">
+        </div>
+        <div class="input-group">
+          <label>Number of Siblings:</label>
+          <input type="number" id="loginSiblings" min="0" value="0" placeholder="How many siblings do you have?">
+        </div>
+        <button onclick="login()">🚀 Join Game</button>
+      </div>
+
+      <!-- Trading Section (hidden until logged in) -->
+      <div id="tradingSection" class="is-hidden">
+        <div class="warning-box">
+          Logged in as: <span class="player-badge" id="playerBadge"></span>
+          <button onclick="logout()" class="logout-btn" style="margin-left:10px;">🚪 Logout</button>
+        </div>
+        <div class="input-group">
+          <label>Order Type:</label>
+          <select id="orderType">
+            <option value="bid">Bid (Buy)</option>
+            <option value="ask">Ask (Sell)</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Price:</label>
+          <input type="number" id="orderPrice" step="0.01" placeholder="Order price">
+        </div>
+        <div class="info-box" style="font-size:0.9em; margin:10px 0;">Order size is fixed at <strong>1 contract</strong></div>
+        <button onclick="submitOrder()">📤 Submit Order</button>
+        <button onclick="cancelMyOrders()" class="cancel-btn">❌ Cancel My Orders</button>
+      </div>
     </div>
 
     <div class="panel">
@@ -67,6 +109,23 @@
       <div class="positions-table" id="positionsTable"></div>
       <div class="panel">
         <h2>👥 Players & Sibling Counts</h2>
+        
+        <!-- Statistics -->
+        <div class="stats-grid">
+          <div class="stat-box revealed">
+            <div class="label">Revealed</div>
+            <div class="value" id="revealedCount">0</div>
+          </div>
+          <div class="stat-box hidden-stat">
+            <div class="label">Hidden</div>
+            <div class="value" id="hiddenCount">0</div>
+          </div>
+          <div class="stat-box total">
+            <div class="label">Total Siblings</div>
+            <div class="value" id="totalSiblings">0</div>
+          </div>
+        </div>
+        
         <div class="sibling-list" id="siblingList"></div>
       </div>
     </div>
@@ -74,6 +133,8 @@
 
   <script>
     let gameState = { players:{}, orders:[], trades:[], positions:{}, orderIdCounter:1, settledPrice:null };
+    let myPlayerName = sessionStorage.getItem('orderBookPlayerName') || '';
+    let lastKnownSettledPrice = null;
 
     async function api(path, method='GET', body) {
       const res = await fetch(path, { method, headers: { 'Content-Type':'application/json' }, body: body ? JSON.stringify(body) : undefined });
@@ -84,7 +145,14 @@
     function connectSSE() {
       const ev = new EventSource('/api/events');
       ev.onmessage = (msg) => {
-        try { const payload = JSON.parse(msg.data); if (payload.type==='state') { gameState = payload.state; updateDisplay(); } }
+        try { 
+          const payload = JSON.parse(msg.data); 
+          if (payload.type==='state') { 
+            gameState = payload.state; 
+            checkForReset();
+            updateDisplay(); 
+          } 
+        }
         catch(_){}
       };
     }
@@ -98,14 +166,76 @@
       setTimeout(()=>{ msg.style.display='none'; }, 3000);
     }
 
+    function login() {
+      const name = document.getElementById('loginName').value.trim();
+      const siblings = parseInt(document.getElementById('loginSiblings').value);
+      if (!name) return showMessage('Please enter your name','error');
+      if (isNaN(siblings) || siblings < 0) return showMessage('Please enter a valid number of siblings (0 or more)','error');
+      
+      // Register player with server
+      api('/api/addPlayer','POST',{name, count: siblings})
+        .then(() => {
+          myPlayerName = name;
+          sessionStorage.setItem('orderBookPlayerName', name);
+          updateLoginState();
+          showMessage(`Welcome, ${name}! Registered with ${siblings} sibling(s).`,'success');
+        })
+        .catch(e => {
+          if (e.error && e.error.includes('Invalid input')) {
+            showMessage('Registration failed. Please check your inputs.','error');
+          } else {
+            // Player might already exist - allow login anyway
+            myPlayerName = name;
+            sessionStorage.setItem('orderBookPlayerName', name);
+            updateLoginState();
+            showMessage(`Welcome back, ${name}!`,'success');
+          }
+        });
+    }
+
+    function logout() {
+      if (!confirm('Are you sure you want to logout? You can rejoin anytime.')) return;
+      myPlayerName = '';
+      sessionStorage.removeItem('orderBookPlayerName');
+      updateLoginState();
+      showMessage('Logged out successfully','info');
+    }
+
+    function updateLoginState() {
+      const loginSection = document.getElementById('loginSection');
+      const tradingSection = document.getElementById('tradingSection');
+      const playerBadge = document.getElementById('playerBadge');
+      
+      if (myPlayerName) {
+        loginSection.classList.add('is-hidden');
+        tradingSection.classList.remove('is-hidden');
+        playerBadge.textContent = myPlayerName;
+      } else {
+        loginSection.classList.remove('is-hidden');
+        tradingSection.classList.add('is-hidden');
+        document.getElementById('loginName').value = '';
+      }
+    }
+
+    function checkForReset() {
+      // If settled price changes from non-null to null, game was reset
+      if (lastKnownSettledPrice !== null && gameState.settledPrice === null) {
+        // Game was reset - clear login
+        if (myPlayerName) {
+          showMessage('Game was reset. Please login again.','info');
+          logout();
+        }
+      }
+      lastKnownSettledPrice = gameState.settledPrice;
+    }
+
     async function submitOrder() {
-      const playerName = document.getElementById('myPlayerName').value.trim();
+      if (!myPlayerName) return showMessage('Please login first','error');
       const side = document.getElementById('orderType').value;
       const price = parseFloat(document.getElementById('orderPrice').value);
       const size = 1; // Fixed size of 1 contract
-      if (!playerName) return showMessage('Please enter your name','error');
       if (!Number.isFinite(price) || price <= 0) return showMessage('Please enter a valid price','error');
-      try { const r = await api('/api/submitOrder','POST',{ playerName, side, price, size });
+      try { const r = await api('/api/submitOrder','POST',{ playerName: myPlayerName, side, price, size });
         if ((r.trades||[]).length) showMessage(`Order executed! ${r.trades.length} trade(s)`,'success');
         else showMessage(`Order placed in book at ${price.toFixed(2)}`,'success');
         document.getElementById('orderPrice').value='';
@@ -119,9 +249,8 @@
     }
 
     async function cancelMyOrders() {
-      const playerName = document.getElementById('myPlayerName').value.trim();
-      if (!playerName) return showMessage('Please enter your name','error');
-      try { const r = await api('/api/cancelOrders','POST',{ playerName }); showMessage(`Cancelled ${r.cancelled} order(s)`,'success'); }
+      if (!myPlayerName) return showMessage('Please login first','error');
+      try { const r = await api('/api/cancelOrders','POST',{ playerName: myPlayerName }); showMessage(`Cancelled ${r.cancelled} order(s)`,'success'); }
       catch(e){ showMessage(e.error || 'Error cancelling','error'); }
     }
 
@@ -137,10 +266,9 @@
       const c = document.getElementById('orderBookDisplay'); c.innerHTML = '';
       const bids = gameState.orders.filter(o=>o.side==='bid').sort((a,b)=>b.price-a.price || a.id-b.id);
       const asks = gameState.orders.filter(o=>o.side==='ask').sort((a,b)=>a.price-b.price || a.id-b.id);
-      const myName = document.getElementById('myPlayerName').value.trim();
       for (let i=asks.length-1; i>=0; i--) {
         const o = asks[i]; const div = document.createElement('div');
-        div.className = 'order-row ask-row' + (o.player===myName ? ' my-order' : '');
+        div.className = 'order-row ask-row' + (o.player===myPlayerName ? ' my-order' : '');
         div.innerHTML = `<div class="ask-price">${o.price.toFixed(2)}</div><div>${o.size}</div><div>${o.player}</div>`;
         c.appendChild(div);
       }
@@ -149,7 +277,7 @@
       const spreadDiv = document.createElement('div'); spreadDiv.className = 'spread-row'; spreadDiv.textContent = `--- Spread: ${spread} ---`; c.appendChild(spreadDiv);
       for (const o of bids) {
         const div = document.createElement('div');
-        div.className = 'order-row bid-row' + (o.player===myName ? ' my-order' : '');
+        div.className = 'order-row bid-row' + (o.player===myPlayerName ? ' my-order' : '');
         div.innerHTML = `<div class="bid-price">${o.price.toFixed(2)}</div><div>${o.size}</div><div>${o.player}</div>`;
         c.appendChild(div);
       }
@@ -185,17 +313,36 @@
 
     function updateSiblingList() {
       const c = document.getElementById('siblingList'); c.innerHTML = '';
+      
+      let revealedCount = 0;
+      let hiddenCount = 0;
+      let totalRevealedSiblings = 0;
+      
       Object.keys(gameState.players).forEach(name => {
         const p = gameState.players[name];
         const div = document.createElement('div');
         div.className = p.revealed ? 'sibling-item' : 'sibling-item sibling-hidden';
         div.textContent = p.revealed ? `${name}: ${p.siblingCount}` : `${name}: ???`;
         c.appendChild(div);
+        
+        // Update counters
+        if (p.revealed) {
+          revealedCount++;
+          totalRevealedSiblings += p.siblingCount;
+        } else {
+          hiddenCount++;
+        }
       });
+      
+      // Update stat displays
+      document.getElementById('revealedCount').textContent = revealedCount;
+      document.getElementById('hiddenCount').textContent = hiddenCount;
+      document.getElementById('totalSiblings').textContent = totalRevealedSiblings;
     }
 
     (async function init(){
-      try { const init = await api('/api/state'); gameState = init.state || gameState; } catch(_){}
+      try { const init = await api('/api/state'); gameState = init.state || gameState; lastKnownSettledPrice = gameState.settledPrice; } catch(_){}
+      updateLoginState();
       updateDisplay();
       connectSSE();
     })();

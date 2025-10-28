@@ -250,9 +250,8 @@ const server = http.createServer(async (req, res) => {
     return sendJSON(res, 200, { version, state: gameState });
   }
 
-  // API: add player
+  // API: add player (public - no auth required for self-registration)
   if (req.method === 'POST' && pathname === '/api/addPlayer') {
-    if (!checkAdminAuth(req)) return unauthorized(res);
     try {
       const { name, count } = await readBody(req);
       if (!name || typeof count !== 'number' || count < 0) return sendJSON(res, 400, { error: 'Invalid input' });

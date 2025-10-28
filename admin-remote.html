@@ -96,7 +96,8 @@
     // Networking helpers
     async function api(path, method='GET', body) {
       const headers = { 'Content-Type':'application/json' };
-      if (adminToken && (path.includes('addPlayer') || path.includes('toggleReveal') || path.includes('reset') || path.includes('settle'))) {
+      // Only admin-specific endpoints require token (not addPlayer - that's public for self-registration)
+      if (adminToken && (path.includes('toggleReveal') || path.includes('reset') || path.includes('settle'))) {
         headers['Authorization'] = `Bearer ${adminToken}`;
       }
       const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
@@ -144,9 +145,13 @@
       const count = parseInt(document.getElementById('siblingCount').value);
       if (!name) return showMessage('Please enter a player name','error');
       if (isNaN(count) || count < 0) return showMessage('Please enter a valid sibling count','error');
-      try { await api('/api/addPlayer','POST',{name, count}); showMessage(`Player ${name} added`,'success'); document.getElementById('playerName').value=''; document.getElementById('siblingCount').value=''; }
+      try { 
+        await api('/api/addPlayer','POST',{name, count}); 
+        showMessage(`Player ${name} added`,'success'); 
+        document.getElementById('playerName').value=''; 
+        document.getElementById('siblingCount').value=''; 
+      }
       catch (e) { 
-        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
         showMessage(e.error || 'Error adding player','error'); 
       }
     }
@@ -192,11 +197,6 @@
               await api('/api/addPlayer','POST',{name, count});
               successCount++;
             } catch (e) {
-              if (e.error && e.error.includes('Unauthorized')) { 
-                promptForToken(); 
-                showMessage('Authentication required. Please try again after entering token.','error');
-                return; 
-              }
               console.error(`Error adding player ${name}:`, e);
               errorCount++;
             }

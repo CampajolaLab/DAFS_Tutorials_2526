@@ -81,7 +81,7 @@ The entire application lives in `index.html` with embedded styles and JavaScript
 - API surface (JSON):
   - `GET /api/state` → full `gameState`
   - `GET /api/events` (SSE) → pushes `{ type: 'state', state }` on every change
-  - `POST /api/addPlayer { name, count }` (requires admin token)
+  - `POST /api/addPlayer { name, count }` (public - allows self-registration)
   - `POST /api/toggleReveal { name }` (requires admin token)
   - `POST /api/submitOrder { playerName, side, price, size }` (applies tighten-or-trade, matches, updates positions)
   - `POST /api/cancelOrders { playerName }`

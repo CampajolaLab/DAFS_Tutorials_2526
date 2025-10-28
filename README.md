@@ -42,13 +42,23 @@ Charlie,1
 - First row can be a header (will be auto-detected and skipped)
 - Each subsequent row: player name, sibling count (comma-separated)
 - See `sample_players.csv` for an example
+- **Note:** Players can also self-register via the client login screen
 
 **Player Order Constraints:**
 - Client UI automatically fixes order size to **1 contract** per order
 - Players can only specify order type (bid/ask) and price
 
+**Player Login:**
+- Players must login with their name and sibling count before trading
+- During login, they automatically register with the server (if not already registered)
+- Name is locked after login (can't be changed during active game)
+- Login persists in browser session (survive page refresh)
+- Players are automatically logged out when game is reset
+- Optional logout button available if player wants to change identity
+
 Notes
-- **Security:** Admin endpoints (add player, toggle reveal, reset, settle) require the admin token via `Authorization: Bearer <token>` header
+- **Security:** Admin-only endpoints (toggle reveal, reset, settle) require the admin token via `Authorization: Bearer <token>` header
+- **Player registration** is public (no token needed) to allow self-registration from client UI
 - **Port selection:** Default is 8080; override with `--port` flag or `PORT` environment variable
 - No external dependencies are required for the server (built-in Node modules only)
 - State is in-memory; restarting the server clears the game and generates a new admin token
