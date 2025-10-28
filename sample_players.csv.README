@@ -1,0 +1,3 @@
+# Deprecated: See tutorial_1/data/sample_players.csv
+
+This file is kept for reference only. All new development should use the sample_players.csv in the data folder.

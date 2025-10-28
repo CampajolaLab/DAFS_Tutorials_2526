@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Order Book Mechanics - Client (Remote)</title>
+  <style>
+    body { font-family: 'Courier New', monospace; background:#1a1a2e; color:#eee; padding:20px; }
+    .container { max-width: 900px; margin:0 auto; }
+    h1 { text-align:center; color:#00d4ff; margin-bottom:20px; font-size:2em; }
+    .panel { background:#16213e; border:2px solid #0f3460; border-radius:8px; padding:20px; margin-bottom:20px; }
+    .panel h2 { color:#00d4ff; margin-bottom:15px; font-size:1.3em; border-bottom:2px solid #0f3460; padding-bottom:10px; }
+    .order-book-header, .order-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:0; }
+    .order-book-header { padding:8px; background:#0f3460; font-weight:bold; margin-bottom:5px; border-radius:4px; }
+    .order-row { padding:6px 8px; margin:2px 0; border-radius:3px; }
+    .bid-row { background:rgba(0,255,100,0.1); }
+    .ask-row { background:rgba(255,50,50,0.1); }
+    .bid-price { color:#00ff64; font-weight:bold; }
+    .ask-price { color:#ff3232; font-weight:bold; }
+    .spread-row { text-align:center; padding:10px; color:#888; font-style:italic; margin:5px 0; }
+    .input-group { margin:15px 0; }
+    .input-group label { display:block; margin-bottom:5px; color:#00d4ff; font-weight:bold; }
+    .input-group input, .input-group select { width:100%; padding:10px; background:#0f3460; border:1px solid #00d4ff; color:#eee; border-radius:4px; font-family:'Courier New', monospace; font-size:1em; }
+    button { background:#00d4ff; color:#16213e; border:none; padding:12px 24px; font-weight:bold; cursor:pointer; border-radius:4px; font-size:1em; margin:5px 5px 5px 0; transition:all 0.3s; }
+    button:hover { background:#00a8cc; transform:translateY(-2px); }
+    button:active { transform:translateY(0); }
+    button.cancel-btn { background:#ff3232; color:white; }
+    button.cancel-btn:hover { background:#cc0000; }
+    button.logout-btn { background:#ff8800; color:white; }
+    button.logout-btn:hover { background:#cc6600; }
+    .positions-table { margin-top:10px; }
+    .position-row { display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr; padding:8px; margin:3px 0; background:rgba(255,255,255,0.05); border-radius:3px; font-size:0.95em; }
+    .position-header { font-weight:bold; background:#0f3460; color:#00d4ff; }
+    .profit { color:#00ff64; }
+    .loss { color:#ff3232; }
+    .info-box { background:rgba(0,212,255,0.1); border-left:4px solid #00d4ff; padding:12px; margin:15px 0; border-radius:4px; }
+    .warning-box { background:rgba(255,136,0,0.1); border-left:4px solid #ff8800; padding:12px; margin:15px 0; border-radius:4px; }
+    .sibling-list { display:flex; flex-wrap:wrap; gap:10px; margin:15px 0; }
+    .sibling-item { background:rgba(255,255,255,0.1); padding:10px 15px; border-radius:4px; font-weight:bold; }
+    .sibling-hidden { background:rgba(255,255,255,0.05); color:#555; }
+    .player-badge { display:inline-block; background:#00d4ff; color:#16213e; padding:8px 16px; border-radius:4px; font-weight:bold; margin:10px 0; }
+    .stats-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin:15px 0; }
+    .stat-box { background:rgba(255,255,255,0.05); padding:15px; border-radius:4px; text-align:center; }
+    .stat-box .label { color:#888; font-size:0.85em; margin-bottom:5px; }
+    .stat-box .value { font-size:1.5em; font-weight:bold; color:#00d4ff; }
+    .stat-box.revealed { border-left:3px solid #00ff64; }
+    .stat-box.hidden-stat { border-left:3px solid #ff3232; }
+    .stat-box.total { border-left:3px solid #00d4ff; }
+    .turn-indicator { background:rgba(255,136,0,0.2); border:2px solid #ff8800; border-radius:6px; padding:15px; margin:15px 0; text-align:center; font-size:1.1em; }
+    .turn-indicator.your-turn { background:rgba(0,255,100,0.2); border-color:#00ff64; animation:pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { box-shadow:0 0 5px rgba(0,255,100,0.3); } 50% { box-shadow:0 0 20px rgba(0,255,100,0.8); } }
+    .turn-indicator.not-your-turn { background:rgba(255,50,50,0.1); border-color:#ff3232; }
+    .is-hidden { display:none; }
+    #message { position:fixed; top:20px; right:20px; padding:15px 25px; border-radius:4px; font-weight:bold; display:none; z-index:1000; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎮 Order Book Trading Game — Client (Remote)</h1>
+    <div id="message"></div>
+
+    <!-- Login Panel (shown first) -->
+    <div class="panel" id="loginPanel">
+      <h2>🚀 Join Game</h2>
+      <div class="info-box">Please enter your details to join the game</div>
+      <div class="input-group">
+        <label>Your Name:</label>
+        <input type="text" id="loginName" placeholder="Enter your name">
+      </div>
+      <div class="input-group">
+        <label>Number of Siblings:</label>
+        <input type="number" id="loginSiblings" min="0" value="0" placeholder="How many siblings do you have?">
+      </div>
+      <button onclick="login()">🚀 Join Game</button>
+    </div>
+
+    <!-- Game sections (hidden until logged in) -->
+    <div id="gameContent" class="is-hidden">
+      
+      <!-- Player status bar -->
+      <div class="panel">
+        <div class="warning-box">
+          Logged in as: <span class="player-badge" id="playerBadge"></span>
+          <button onclick="logout()" class="logout-btn" style="margin-left:10px;">🚪 Logout</button>
+        </div>
+        
+        <!-- Turn indicator -->
+        <div id="turnIndicator" class="turn-indicator is-hidden">
+          <strong>Turn Status:</strong> <span id="turnStatus"></span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>📖 Order Book</h2>
+        <div class="info-box"><strong>Live:</strong> Real-time updates from the server. Place orders below.</div>
+        <div class="order-book">
+          <div class="order-book-header"><div>Price</div><div>Size</div><div>Player</div></div>
+          <div id="orderBookDisplay"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>📈 Midprice History</h2>
+        <canvas id="priceChart" width="600" height="300" style="width:100%; max-width:600px; height:auto; background:rgba(0,0,0,0.3); border-radius:4px;"></canvas>
+      </div>
+
+      <div class="panel">
+        <h2>🎛️ Trading</h2>
+        <div class="input-group">
+          <label>Order Type:</label>
+          <select id="orderType">
+            <option value="bid">Bid (Buy)</option>
+            <option value="ask">Ask (Sell)</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Price:</label>
+          <input type="number" id="orderPrice" step="1" min="1" placeholder="Order price (integer only)">
+        </div>
+        <div class="info-box" style="font-size:0.9em; margin:10px 0;">Order size is fixed at <strong>1 contract</strong></div>
+        <button id="submitBtn" onclick="submitOrder()">📤 Submit Order</button>
+      </div>
+
+      <div class="panel">
+        <h2>📊 Positions</h2>
+        <div class="positions-table" id="positionsTable"></div>
+      </div>
+
+      <div class="panel">
+        <h2>👥 Players & Sibling Counts</h2>
+        
+        <!-- Statistics -->
+        <div class="stats-grid">
+          <div class="stat-box revealed">
+            <div class="label">Revealed</div>
+            <div class="value" id="revealedCount">0</div>
+          </div>
+          <div class="stat-box hidden-stat">
+            <div class="label">Hidden</div>
+            <div class="value" id="hiddenCount">0</div>
+          </div>
+        <div class="stat-box total">
+          <div class="label">Total Siblings</div>
+          <div class="value" id="totalSiblings">0</div>
+        </div>
+      </div>
+      
+      <div class="sibling-list" id="siblingList"></div>
+    </div>
+    
+    </div> <!-- End of gameContent -->
+  </div> <!-- End of container -->
+
+  <script>
+    let gameState = { players:{}, orders:[], trades:[], positions:{}, orderIdCounter:1, settledPrice:null };
+    let myPlayerName = sessionStorage.getItem('orderBookPlayerName') || '';
+    let lastKnownSettledPrice = null;
+
+    async function api(path, method='GET', body) {
+      const res = await fetch(path, { method, headers: { 'Content-Type':'application/json' }, body: body ? JSON.stringify(body) : undefined });
+      const data = await res.json().catch(()=>({}));
+      if (!res.ok) throw data; return data;
+    }
+
+    function connectSSE() {
+      const ev = new EventSource('/api/events');
+      ev.onmessage = (msg) => {
+        try { 
+          const payload = JSON.parse(msg.data); 
+          if (payload.type==='state') { 
+            gameState = payload.state; 
+            checkForReset();
+            updateDisplay(); 
+          } 
+        }
+        catch(_){}
+      };
+    }
+
+    function showMessage(text, type='info') {
+      const msg = document.getElementById('message');
+      msg.textContent = text; msg.style.display = 'block';
+      if (type==='error'){ msg.style.background='#ff3232'; msg.style.color='white'; }
+      else if (type==='success'){ msg.style.background='#00ff64'; msg.style.color='#16213e'; }
+      else { msg.style.background='#00d4ff'; msg.style.color='#16213e'; }
+      setTimeout(()=>{ msg.style.display='none'; }, 3000);
+    }
+
+    function login() {
+      const name = document.getElementById('loginName').value.trim();
+      const siblings = parseInt(document.getElementById('loginSiblings').value);
+      if (!name) return showMessage('Please enter your name','error');
+      if (isNaN(siblings) || siblings < 0) return showMessage('Please enter a valid number of siblings (0 or more)','error');
+      
+      // Register player with server
+      api('/api/addPlayer','POST',{name, count: siblings})
+        .then(() => {
+          myPlayerName = name;
+          sessionStorage.setItem('orderBookPlayerName', name);
+          updateLoginState();
+          showMessage(`Welcome, ${name}! Registered with ${siblings} sibling(s).`,'success');
+        })
+        .catch(e => {
+          if (e.error && e.error.includes('Invalid input')) {
+            showMessage('Registration failed. Please check your inputs.','error');
+          } else {
+            // Player might already exist - allow login anyway
+            myPlayerName = name;
+            sessionStorage.setItem('orderBookPlayerName', name);
+            updateLoginState();
+            showMessage(`Welcome back, ${name}!`,'success');
+          }
+        });
+    }
+
+    function logout() {
+      if (!confirm('Are you sure you want to logout? You can rejoin anytime.')) return;
+      myPlayerName = '';
+      sessionStorage.removeItem('orderBookPlayerName');
+      updateLoginState();
+      showMessage('Logged out successfully','info');
+    }
+
+    function updateLoginState() {
+      const loginPanel = document.getElementById('loginPanel');
+      const gameContent = document.getElementById('gameContent');
+      const playerBadge = document.getElementById('playerBadge');
+      
+      if (myPlayerName) {
+        loginPanel.classList.add('is-hidden');
+        gameContent.classList.remove('is-hidden');
+        playerBadge.textContent = myPlayerName;
+      } else {
+        loginPanel.classList.remove('is-hidden');
+        gameContent.classList.add('is-hidden');
+      }
+    }
+
+    function checkForReset() {
+      // If settled price changes from non-null to null, game was reset
+      if (lastKnownSettledPrice !== null && gameState.settledPrice === null) {
+        // Game was reset - clear login
+        if (myPlayerName) {
+          showMessage('Game was reset. Please login again.','info');
+          logout();
+        }
+      }
+      lastKnownSettledPrice = gameState.settledPrice;
+    }
+
+    async function submitOrder() {
+      if (!myPlayerName) return showMessage('Please login first','error');
+      const side = document.getElementById('orderType').value;
+      const price = parseFloat(document.getElementById('orderPrice').value);
+      const size = 1; // Fixed size of 1 contract
+      if (!Number.isFinite(price) || price <= 0) return showMessage('Please enter a valid price','error');
+      if (!Number.isInteger(price)) return showMessage('Price must be an integer','error');
+      try { const r = await api('/api/submitOrder','POST',{ playerName: myPlayerName, side, price, size });
+        if ((r.trades||[]).length) showMessage(`Order executed! ${r.trades.length} trade(s)`,'success');
+        else showMessage(`Order placed in book at ${price}`,'success');
+        document.getElementById('orderPrice').value='';
+      } catch(e){
+        if (e && e.error === 'Not your turn') {
+          showMessage(`Not your turn! Wait for ${e.currentPlayer || 'your turn'}`,'error');
+        } else if (e && e.error === 'Tighten or trade') {
+          const bb = e.bestBid!=null ? e.bestBid : 'N/A';
+          const ba = e.bestAsk!=null ? e.bestAsk : 'N/A';
+          showMessage(`Order rejected! Improve best ${side} or trade. Best bid: ${bb}, Best ask: ${ba}`,'error');
+        } else showMessage(e.error || 'Error submitting order','error');
+      }
+    }
+
+    async function cancelMyOrders() {
+      if (!myPlayerName) return showMessage('Please login first','error');
+      try { 
+        const r = await api('/api/cancelOrders','POST',{ playerName: myPlayerName }); 
+        showMessage(`Cancelled ${r.cancelled} order(s)`,'success'); 
+      } catch(e){ 
+        if (e && e.error === 'Not your turn') {
+          showMessage(`Not your turn! Wait for ${e.currentPlayer || 'your turn'}`,'error');
+        } else {
+          showMessage(e.error || 'Error cancelling','error');
+        }
+      }
+    }
+
+    function getBestBidAsk() {
+      const bids = gameState.orders.filter(o=>o.side==='bid').sort((a,b)=>b.price-a.price || a.id-b.id);
+      const asks = gameState.orders.filter(o=>o.side==='ask').sort((a,b)=>a.price-b.price || a.id-b.id);
+      return { bestBid: bids[0]?.price ?? null, bestAsk: asks[0]?.price ?? null };
+    }
+
+    function updateDisplay() { updateOrderBook(); updatePositionsTable(); updateSiblingList(); updateTurnStatus(); drawPriceChart(); }
+
+    function getBestBidAsk() {
+      const bids = gameState.orders.filter(o=>o.side==='bid').sort((a,b)=>b.price-a.price || a.id-b.id);
+      const asks = gameState.orders.filter(o=>o.side==='ask').sort((a,b)=>a.price-b.price || a.id-b.id);
+      return { bestBid: bids[0]?.price ?? null, bestAsk: asks[0]?.price ?? null };
+    }
+
+    function updateOrderBook() {
+      const c = document.getElementById('orderBookDisplay'); c.innerHTML = '';
+      const bids = gameState.orders.filter(o=>o.side==='bid').sort((a,b)=>b.price-a.price || a.id-b.id);
+      const asks = gameState.orders.filter(o=>o.side==='ask').sort((a,b)=>a.price-b.price || a.id-b.id);
+      for (let i=asks.length-1; i>=0; i--) {
+        const o = asks[i]; const div = document.createElement('div');
+        div.className = 'order-row ask-row' + (o.player===myPlayerName ? ' my-order' : '');
+        div.innerHTML = `<div class="ask-price">${o.price}</div><div>${o.size}</div><div>${o.player}</div>`;
+        c.appendChild(div);
+      }
+      const { bestBid, bestAsk } = getBestBidAsk();
+      const spread = (bestBid!=null && bestAsk!=null) ? (bestAsk - bestBid) : 'N/A';
+      const spreadDiv = document.createElement('div'); spreadDiv.className = 'spread-row'; spreadDiv.textContent = `--- Spread: ${spread} ---`; c.appendChild(spreadDiv);
+      for (const o of bids) {
+        const div = document.createElement('div');
+        div.className = 'order-row bid-row' + (o.player===myPlayerName ? ' my-order' : '');
+        div.innerHTML = `<div class="bid-price">${o.price}</div><div>${o.size}</div><div>${o.player}</div>`;
+        c.appendChild(div);
+      }
+      if (gameState.orders.length===0) c.innerHTML = '<div class="spread-row">No orders in book</div>';
+    }
+
+    function drawPriceChart() {
+      const canvas = document.getElementById('priceChart');
+      const ctx = canvas.getContext('2d');
+      const width = canvas.width;
+      const height = canvas.height;
+      
+      // Clear canvas
+      ctx.clearRect(0, 0, width, height);
+      
+      if (!gameState.priceHistory || gameState.priceHistory.length === 0) {
+        ctx.fillStyle = '#888';
+        ctx.font = '16px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText('No price history yet', width/2, height/2);
+        return;
+      }
+      
+      // Filter out null prices for scaling
+      const validPrices = gameState.priceHistory.filter(p => p.midPrice !== null).map(p => p.midPrice);
+      if (validPrices.length === 0) {
+        ctx.fillStyle = '#888';
+        ctx.font = '16px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText('No valid prices yet', width/2, height/2);
+        return;
+      }
+      
+      const minPrice = Math.min(...validPrices);
+      const maxPrice = Math.max(...validPrices);
+      const priceRange = maxPrice - minPrice || 1;
+      const padding = 50;
+      const chartWidth = width - 2 * padding;
+      const chartHeight = height - 2 * padding;
+      
+      // Draw axes
+      ctx.strokeStyle = '#0f3460';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(padding, padding);
+      ctx.lineTo(padding, height - padding);
+      ctx.lineTo(width - padding, height - padding);
+      ctx.stroke();
+      
+      // Draw grid lines and Y-axis labels
+      ctx.strokeStyle = '#0f3460';
+      ctx.lineWidth = 1;
+      ctx.fillStyle = '#888';
+      ctx.font = '12px Courier New';
+      ctx.textAlign = 'right';
+      const numYTicks = 5;
+      for (let i = 0; i <= numYTicks; i++) {
+        const priceVal = minPrice + (priceRange * i / numYTicks);
+        const y = height - padding - (chartHeight * i / numYTicks);
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(width - padding, y);
+        ctx.stroke();
+        ctx.fillText(priceVal.toFixed(1), padding - 10, y + 4);
+      }
+      
+      // Draw X-axis labels
+      ctx.textAlign = 'center';
+      const numXTicks = Math.min(10, gameState.priceHistory.length);
+      for (let i = 0; i < numXTicks; i++) {
+        const idx = Math.floor(i * (gameState.priceHistory.length - 1) / (numXTicks - 1));
+        const turn = gameState.priceHistory[idx].turn;
+        const x = padding + (chartWidth * idx / (gameState.priceHistory.length - 1));
+        ctx.fillText(turn, x, height - padding + 20);
+      }
+      
+      // Draw axis labels
+      ctx.fillStyle = '#00d4ff';
+      ctx.font = 'bold 14px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('Turn', width / 2, height - 10);
+      ctx.save();
+      ctx.translate(15, height / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText('Midprice', 0, 0);
+      ctx.restore();
+      
+      // Draw line chart
+      ctx.strokeStyle = '#00d4ff';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      let firstPoint = true;
+      for (let i = 0; i < gameState.priceHistory.length; i++) {
+        const p = gameState.priceHistory[i];
+        if (p.midPrice !== null) {
+          const x = padding + (chartWidth * i / (gameState.priceHistory.length - 1));
+          const y = height - padding - ((p.midPrice - minPrice) / priceRange * chartHeight);
+          if (firstPoint) {
+            ctx.moveTo(x, y);
+            firstPoint = false;
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+      }
+      ctx.stroke();
+      
+      // Draw data points
+      ctx.fillStyle = '#00ff64';
+      for (let i = 0; i < gameState.priceHistory.length; i++) {
+        const p = gameState.priceHistory[i];
+        if (p.midPrice !== null) {
+          const x = padding + (chartWidth * i / (gameState.priceHistory.length - 1));
+          const y = height - padding - ((p.midPrice - minPrice) / priceRange * chartHeight);
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+      }
+    }
+
+    function getMidPrice() {
+      const bids = gameState.orders.filter(o=>o.side==='bid').sort((a,b)=>b.price-a.price || a.id-b.id);
+      const asks = gameState.orders.filter(o=>o.side==='ask').sort((a,b)=>a.price-b.price || a.id-b.id);
+      const bestBid = bids[0]?.price ?? null;
+      const bestAsk = asks[0]?.price ?? null;
+      if (bestBid !== null && bestAsk !== null) {
+        return (bestBid + bestAsk) / 2;
+      }
+      return null;
+    }
+
+    function calculatePnL(name) {
+      const pos = gameState.positions[name]; 
+      if (!pos) return { realized: 0, mtm: 0, total: 0, cash: 0 };
+      
+      const realized = pos.realizedPnL ?? 0;
+      const cash = pos.cash ?? 0;
+      let mtm = 0;
+      let total = 0;
+      
+      // Mark-to-market using mid-price if available, otherwise settled price
+      if (pos.quantity !== 0) {
+        const markPrice = gameState.settledPrice !== null ? gameState.settledPrice : getMidPrice();
+        if (markPrice !== null) {
+          const avgPrice = pos.quantity > 0 ? pos.totalCost / pos.quantity : -pos.totalCost / Math.abs(pos.quantity);
+          mtm = pos.quantity * (markPrice - avgPrice);
+        }
+      }
+      
+      // Total P&L only shows realized P&L when contract is settled
+      if (gameState.settledPrice !== null) {
+        total = realized;
+      }
+      
+      return { realized, mtm, total, cash };
+    }
+
+    function updatePositionsTable() {
+      const c = document.getElementById('positionsTable');
+      const midPrice = getMidPrice();
+      const midPriceDisplay = midPrice !== null ? midPrice.toFixed(2) : 'N/A';
+      c.innerHTML = `<div class="info-box" style="font-size:0.9em; margin-bottom:10px;">Mid-Price: <strong>${midPriceDisplay}</strong></div>
+                     <div class="position-row position-header"><div>Player</div><div>Position</div><div>Cash</div><div>MtM P&L</div><div>Total P&L</div></div>`;
+      
+      const positionsList = Object.keys(gameState.positions);
+      if (positionsList.length === 0) {
+        c.innerHTML += '<div class="info-box">No positions yet. Submit orders to create positions.</div>';
+        return;
+      }
+      
+      // If settled, sort by cash (descending) for ranking
+      if (gameState.settledPrice !== null) {
+        positionsList.sort((a, b) => {
+          const cashA = gameState.positions[a].cash ?? 0;
+          const cashB = gameState.positions[b].cash ?? 0;
+          return cashB - cashA; // Descending order
+        });
+      }
+      
+      positionsList.forEach((name, index) => {
+        const pos = gameState.positions[name];
+        const pnl = calculatePnL(name);
+        const div = document.createElement('div');
+        div.className = 'position-row';
+        
+        // Add rank if settled
+        const rankDisplay = gameState.settledPrice !== null ? `#${index + 1} ` : '';
+        const rankEmoji = index === 0 && gameState.settledPrice !== null ? '🏆 ' : '';
+        
+        div.innerHTML = `<div>${rankEmoji}${rankDisplay}${name}</div><div>${pos.quantity}</div><div class="${pnl.cash>=0?'profit':'loss'}">$${pnl.cash.toFixed(2)}</div><div class="${pnl.mtm>=0?'profit':'loss'}">$${pnl.mtm.toFixed(2)}</div><div class="${pnl.total>=0?'profit':'loss'}">$${pnl.total.toFixed(2)}</div>`;
+        c.appendChild(div);
+      });
+      
+      if (gameState.settledPrice !== null) {
+        const info = document.createElement('div'); 
+        info.className = 'info-box';
+        info.style.marginTop = '15px';
+        info.innerHTML = `<strong>🎯 Contract Settled at ${gameState.settledPrice}</strong> (sum of all sibling counts)<br><br>
+                          <strong>🏆 Final Rankings:</strong> Players ranked by final cash balance. Winner has the most cash!`; 
+        c.appendChild(info);
+      }
+    }
+
+    function updateSiblingList() {
+      const c = document.getElementById('siblingList'); c.innerHTML = '';
+      
+      let revealedCount = 0;
+      let hiddenCount = 0;
+      let totalRevealedSiblings = 0;
+      
+      Object.keys(gameState.players).forEach(name => {
+        const p = gameState.players[name];
+        const div = document.createElement('div');
+        div.className = p.revealed ? 'sibling-item' : 'sibling-item sibling-hidden';
+        div.textContent = p.revealed ? `${name}: ${p.siblingCount}` : `${name}: ???`;
+        c.appendChild(div);
+        
+        // Update counters
+        if (p.revealed) {
+          revealedCount++;
+          totalRevealedSiblings += p.siblingCount;
+        } else {
+          hiddenCount++;
+        }
+      });
+      
+      // Update stat displays
+      document.getElementById('revealedCount').textContent = revealedCount;
+      document.getElementById('hiddenCount').textContent = hiddenCount;
+      document.getElementById('totalSiblings').textContent = totalRevealedSiblings;
+    }
+
+    function updateTurnStatus() {
+      const indicator = document.getElementById('turnIndicator');
+      const statusSpan = document.getElementById('turnStatus');
+      const submitBtn = document.getElementById('submitBtn');
+      
+      // Check if turn-based mode is active
+      if (!gameState.turnOrder || gameState.turnOrder.length === 0 || gameState.currentTurnIndex < 0) {
+        // Turn mode not active - hide indicator, enable submit button
+        indicator.classList.add('is-hidden');
+        if (submitBtn) submitBtn.disabled = false;
+        return;
+      }
+      
+      // Turn mode is active
+      indicator.classList.remove('is-hidden');
+      const currentPlayer = gameState.turnOrder[gameState.currentTurnIndex];
+      const isMyTurn = currentPlayer === myPlayerName;
+      
+      if (isMyTurn) {
+        indicator.className = 'turn-indicator your-turn';
+        statusSpan.textContent = '🎯 YOUR TURN!';
+        if (submitBtn) submitBtn.disabled = false;
+      } else {
+        indicator.className = 'turn-indicator not-your-turn';
+        statusSpan.textContent = `⏳ Waiting for ${currentPlayer}'s turn`;
+        if (submitBtn) submitBtn.disabled = true;
+      }
+    }
+
+    (async function init(){
+      try { const init = await api('/api/state'); gameState = init.state || gameState; lastKnownSettledPrice = gameState.settledPrice; } catch(_){}
+      updateLoginState();
+      updateDisplay();
+      connectSSE();
+    })();
+  </script>
+</body>
+</html>
