@@ -56,6 +56,20 @@ Charlie,1
 - Players are automatically logged out when game is reset
 - Optional logout button available if player wants to change identity
 
+**Turn-Based Mode:**
+The admin can enable turn-based gameplay where only one player can act at a time:
+1. **Set Turn Order:** Click "Set Turn Order (All Players)" to automatically arrange all registered players in alphabetical order
+2. **Start Turns:** Click "Start Turns" to begin turn-based mode (first player gets the turn)
+3. **Manual Turn Assignment:** Click any player's name in the turn order list to give them the turn immediately
+4. **Automatic Advancement:** After a player submits an order or cancels orders, the turn automatically advances to the next player
+5. **Stop Turn Mode:** Click "Stop Turn Mode" to disable turn restrictions (all players can trade freely)
+
+When turn-based mode is active:
+- Clients see a turn indicator showing whose turn it is
+- Submit/Cancel buttons are disabled when it's not the player's turn
+- The active player's name is highlighted in the admin's turn order list
+- Attempting to submit orders out of turn returns an error
+
 Notes
 - **Security:** Admin-only endpoints (toggle reveal, reset, settle) require the admin token via `Authorization: Bearer <token>` header
 - **Player registration** is public (no token needed) to allow self-registration from client UI

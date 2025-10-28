@@ -8,14 +8,19 @@
     body { font-family: 'Courier New', monospace; background:#1a1a2e; color:#eee; padding:20px; }
     .container { max-width: 1400px; margin:0 auto; }
     h1 { text-align:center; color:#00d4ff; margin-bottom:20px; font-size:2em; }
-    .main-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; margin-bottom:20px; }
+    .main-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px; }
+    .left-column { display:flex; flex-direction:column; gap:20px; }
+    .right-column { display:flex; flex-direction:column; gap:20px; }
     .panel { background:#16213e; border:2px solid #0f3460; border-radius:8px; padding:20px; }
     .panel h2 { color:#00d4ff; margin-bottom:15px; font-size:1.3em; border-bottom:2px solid #0f3460; padding-bottom:10px; }
     .order-book-header, .order-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:0; }
     .order-book-header { padding:8px; background:#0f3460; font-weight:bold; margin-bottom:5px; border-radius:4px; }
-    .order-row { padding:6px 8px; margin:2px 0; border-radius:3px; }
+    .order-row { padding:6px 8px; margin:2px 0; border-radius:3px; transition:all 0.2s; }
+    .order-row:hover { transform:translateX(4px); box-shadow:0 2px 8px rgba(0,212,255,0.3); }
     .bid-row { background:rgba(0,255,100,0.1); }
+    .bid-row:hover { background:rgba(0,255,100,0.2); }
     .ask-row { background:rgba(255,50,50,0.1); }
+    .ask-row:hover { background:rgba(255,50,50,0.2); }
     .bid-price { color:#00ff64; font-weight:bold; }
     .ask-price { color:#ff3232; font-weight:bold; }
     .spread-row { text-align:center; padding:10px; color:#888; font-style:italic; margin:5px 0; }
@@ -28,7 +33,7 @@
     button.cancel-btn { background:#ff3232; color:white; }
     button.cancel-btn:hover { background:#cc0000; }
     .positions-table { margin-top:10px; }
-    .position-row { display:grid; grid-template-columns:2fr 1fr 1fr; padding:8px; margin:3px 0; background:rgba(255,255,255,0.05); border-radius:3px; }
+    .position-row { display:grid; grid-template-columns:1.5fr 0.8fr 1fr 1fr 1fr; padding:8px 12px; margin:3px 0; background:rgba(255,255,255,0.05); border-radius:3px; font-size:1em; }
     .position-header { font-weight:bold; background:#0f3460; color:#00d4ff; }
     .profit { color:#00ff64; }
     .loss { color:#ff3232; }
@@ -36,6 +41,9 @@
     .sibling-list { display:flex; flex-wrap:wrap; gap:10px; margin:15px 0; }
     .sibling-item { background:rgba(255,255,255,0.1); padding:10px 15px; border-radius:4px; font-weight:bold; cursor:pointer; }
     .sibling-hidden { background:rgba(255,255,255,0.05); color:#555; }
+    .turn-item { background:rgba(255,255,255,0.1); padding:10px 15px; border-radius:4px; font-weight:bold; cursor:pointer; margin:5px; border:2px solid transparent; transition:all 0.3s; }
+    .turn-item:hover { background:rgba(0,212,255,0.2); border-color:#00d4ff; }
+    .turn-item.active { background:rgba(0,255,100,0.3); border-color:#00ff64; box-shadow:0 0 10px rgba(0,255,100,0.5); }
     .order-list { max-height:300px; overflow-y:auto; }
     .my-order { border-left:3px solid #00d4ff; }
     #message { position:fixed; top:20px; right:20px; padding:15px 25px; border-radius:4px; font-weight:bold; display:none; z-index:1000; }
@@ -47,44 +55,70 @@
     <h1>📊 Order Book Trading Game — Admin (Remote)</h1>
     <div id="message"></div>
     <div class="main-grid">
-                  <div class="panel">
-                <h2>🔧 Admin Panel</h2>
-                <div class="info-box"><strong>Server-backed:</strong> All changes are saved on the server and pushed to clients in real-time.</div>
-                
-                <h3 style="color:#00d4ff; margin-top:20px; margin-bottom:10px; font-size:1.1em;">Import from CSV</h3>
-                <div class="input-group">
-                    <label>Upload CSV File (name, sibling_count):</label>
-                    <input type="file" id="csvFile" accept=".csv,text/csv" style="padding:8px;">
-                </div>
-                <button onclick="uploadCSV()">📂 Import Players from CSV</button>
-                
-                <h3 style="color:#00d4ff; margin-top:20px; margin-bottom:10px; font-size:1.1em;">Add Single Player</h3>
-                <div class="input-group"><label>Player Name:</label><input type="text" id="playerName" placeholder="Enter player name"></div>
-                <div class="input-group"><label>Sibling Count:</label><input type="number" id="siblingCount" min="0" placeholder="Number of siblings"></div>
-                <button onclick="addPlayer()">➕ Add Player</button>
-                
-                <h3 style="color:#00d4ff; margin-top:20px; margin-bottom:10px; font-size:1.1em;">Game Controls</h3>
-                <button onclick="resetGame()">🔄 Reset Game</button>
-                <button onclick="settleContract()">💰 Settle Contract</button>
-                <div class="sibling-list" id="siblingList"></div>
-            </div>
-      <div class="panel">
-        <h2>📖 Order Book</h2>
-        <div class="info-box"><strong>Rule:</strong> You must either improve the best bid/offer or trade against existing orders.</div>
-        <div class="order-book">
-          <div class="order-book-header"><div>Price</div><div>Size</div><div>Player</div></div>
-          <div id="orderBookDisplay"></div>
+      <!-- Left Column -->
+      <div class="left-column">
+        <div class="panel">
+          <h2>🔧 Admin Panel</h2>
+          <div class="info-box"><strong>Server-backed:</strong> All changes are saved on the server and pushed to clients in real-time.</div>
+          
+          <h3 style="color:#00d4ff; margin-top:20px; margin-bottom:10px; font-size:1.1em;">Import from CSV</h3>
+          <div class="input-group">
+            <label>Upload CSV File (name, sibling_count):</label>
+            <input type="file" id="csvFile" accept=".csv,text/csv" style="padding:8px;">
+          </div>
+          <button onclick="uploadCSV()">📂 Import Players from CSV</button>
+          
+          <h3 style="color:#00d4ff; margin-top:20px; margin-bottom:10px; font-size:1.1em;">Add Single Player</h3>
+          <div class="input-group"><label>Player Name:</label><input type="text" id="playerName" placeholder="Enter player name"></div>
+          <div class="input-group"><label>Sibling Count:</label><input type="number" id="siblingCount" min="0" placeholder="Number of siblings"></div>
+          <button onclick="addPlayer()">➕ Add Player</button>
+          
+          <h3 style="color:#00d4ff; margin-top:20px; margin-bottom:10px; font-size:1.1em;">Game Controls</h3>
+          <button onclick="resetGame()">🔄 Reset Game</button>
+          <button onclick="settleContract()">💰 Settle Contract</button>
+          
+          <h3 style="color:#00d4ff; margin-top:20px; margin-bottom:10px; font-size:1.1em;">Turn Order</h3>
+          <div class="info-box">Click a player to give them the turn. Drag to reorder (not yet implemented - use buttons to set order).</div>
+          <button onclick="autoSetTurnOrder()">📋 Set Turn Order (All Players)</button>
+          <button onclick="startTurns()">▶️ Start Turns</button>
+          <button onclick="stopTurns()">⏹️ Stop Turn Mode</button>
+          <div id="turnOrderDisplay" style="margin-top:15px;"></div>
+          
+          <h3 style="color:#00d4ff; margin-top:20px; margin-bottom:10px; font-size:1.1em;">Sibling Reveals</h3>
+          <div class="sibling-list" id="siblingList"></div>
+        </div>
+
+        <div class="panel">
+          <h2>💼 Player Positions</h2>
+          <div class="positions-table" id="positionsTable"></div>
         </div>
       </div>
-      <div class="panel">
-        <h2>🎮 Player Controls</h2>
-        <div class="input-group"><label>Your Name:</label><input type="text" id="myPlayerName" placeholder="Enter your name"></div>
-        <div class="input-group"><label>Order Type:</label><select id="orderType"><option value="bid">Bid (Buy)</option><option value="ask">Ask (Sell)</option></select></div>
-        <div class="input-group"><label>Price:</label><input type="number" id="orderPrice" step="0.01" placeholder="Order price"></div>
-        <div class="input-group"><label>Size:</label><input type="number" id="orderSize" min="1" value="1" placeholder="Order size"></div>
-        <button onclick="submitOrder()">📤 Submit Order</button>
-        <button onclick="cancelMyOrders()" class="cancel-btn">❌ Cancel My Orders</button>
-        <div class="positions-table" id="positionsTable"></div>
+
+      <!-- Right Column -->
+      <div class="right-column">
+        <div class="panel">
+          <h2>📖 Order Book</h2>
+          <div class="info-box"><strong>Rule:</strong> You must either improve the best bid/offer or trade against existing orders.</div>
+          <div class="order-book">
+            <div class="order-book-header"><div>Price</div><div>Size</div><div>Player</div></div>
+            <div id="orderBookDisplay"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>📈 Midprice History</h2>
+          <canvas id="priceChart" width="600" height="300" style="width:100%; max-width:600px; height:auto; background:rgba(0,0,0,0.3); border-radius:4px;"></canvas>
+        </div>
+
+        <div class="panel">
+          <h2>🎮 Player Controls</h2>
+          <div class="input-group"><label>Your Name:</label><input type="text" id="myPlayerName" placeholder="Enter your name"></div>
+          <div class="input-group"><label>Order Type:</label><select id="orderType"><option value="bid">Bid (Buy)</option><option value="ask">Ask (Sell)</option></select></div>
+          <div class="input-group"><label>Price:</label><input type="number" id="orderPrice" step="1" min="1" placeholder="Order price (integer only)"></div>
+          <div class="input-group"><label>Size:</label><input type="number" id="orderSize" min="1" value="1" placeholder="Order size"></div>
+          <button onclick="submitOrder()">📤 Submit Order</button>
+          <button onclick="cancelMyOrders()" class="cancel-btn">❌ Cancel My Orders</button>
+        </div>
       </div>
     </div>
   </div>
@@ -96,8 +130,10 @@
     // Networking helpers
     async function api(path, method='GET', body) {
       const headers = { 'Content-Type':'application/json' };
-      // Only admin-specific endpoints require token (not addPlayer - that's public for self-registration)
-      if (adminToken && (path.includes('toggleReveal') || path.includes('reset') || path.includes('settle'))) {
+      // Admin-specific endpoints require token
+      if (adminToken && (path.includes('toggleReveal') || path.includes('reset') || path.includes('settle') 
+          || path.includes('setTurnOrder') || path.includes('setCurrentTurn') || path.includes('startTurns') 
+          || path.includes('stopTurns') || path.includes('cancelOrder'))) {
         headers['Authorization'] = `Bearer ${adminToken}`;
       }
       const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
@@ -246,15 +282,16 @@
       const size = parseInt(document.getElementById('orderSize').value);
       if (!playerName) return showMessage('Please enter your name','error');
       if (!Number.isFinite(price) || price <= 0) return showMessage('Please enter a valid price','error');
+      if (!Number.isInteger(price)) return showMessage('Price must be an integer','error');
       if (!Number.isInteger(size) || size <= 0) return showMessage('Please enter a valid size','error');
       try { const r = await api('/api/submitOrder','POST',{ playerName, side, price, size });
         if ((r.trades||[]).length) showMessage(`Order executed! ${r.trades.length} trade(s)`,'success');
-        else showMessage(`Order placed in book at ${price.toFixed(2)}`,'success');
+        else showMessage(`Order placed in book at ${price}`,'success');
         document.getElementById('orderPrice').value=''; document.getElementById('orderSize').value='';
       } catch(e){
         if (e && e.error === 'Tighten or trade') {
-          const bb = e.bestBid!=null ? e.bestBid.toFixed(2) : 'N/A';
-          const ba = e.bestAsk!=null ? e.bestAsk.toFixed(2) : 'N/A';
+          const bb = e.bestBid!=null ? e.bestBid : 'N/A';
+          const ba = e.bestAsk!=null ? e.bestAsk : 'N/A';
           showMessage(`Order rejected! Improve best ${side} or trade. Best bid: ${bb}, Best ask: ${ba}`,'error');
         } else showMessage(e.error || 'Error submitting order','error');
       }
@@ -264,6 +301,60 @@
       const playerName = document.getElementById('myPlayerName').value.trim();
       if (!playerName) return showMessage('Please enter your name','error');
       try { const r = await api('/api/cancelOrders','POST',{ playerName }); showMessage(`Cancelled ${r.cancelled} order(s)`,'success'); } catch(e){ showMessage(e.error || 'Error cancelling','error'); }
+    }
+
+    async function cancelOrder(orderId) {
+      if (!confirm(`Cancel order #${orderId}?`)) return;
+      try {
+        await api('/api/cancelOrder','POST',{ orderId });
+        showMessage(`Order #${orderId} cancelled`,'success');
+      } catch(e){
+        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        showMessage(e.error || 'Error cancelling order','error');
+      }
+    }
+
+    // Turn management
+    async function autoSetTurnOrder() {
+      const playerNames = Object.keys(gameState.players || {}).sort();
+      if (playerNames.length === 0) return showMessage('No players to add to turn order','error');
+      try {
+        await api('/api/setTurnOrder','POST',{ turnOrder: playerNames });
+        showMessage(`Turn order set for ${playerNames.length} players`,'success');
+      } catch(e){
+        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        showMessage(e.error || 'Error setting turn order','error');
+      }
+    }
+
+    async function startTurns() {
+      try {
+        await api('/api/startTurns','POST');
+        showMessage('Turns started!','success');
+      } catch(e){
+        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        showMessage(e.error || 'Error starting turns','error');
+      }
+    }
+
+    async function stopTurns() {
+      try {
+        await api('/api/stopTurns','POST');
+        showMessage('Turn mode stopped','success');
+      } catch(e){
+        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        showMessage(e.error || 'Error stopping turns','error');
+      }
+    }
+
+    async function setCurrentTurn(playerName) {
+      try {
+        await api('/api/setCurrentTurn','POST',{ playerName });
+        showMessage(`Turn given to ${playerName}`,'success');
+      } catch(e){
+        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        showMessage(e.error || 'Error setting turn','error');
+      }
     }
 
     // UI updates
@@ -277,6 +368,8 @@
       updateSiblingList();
       updateOrderBook();
       updatePositionsTable();
+      updateTurnOrderDisplay();
+      drawPriceChart();
     }
 
     function updateSiblingList() {
@@ -292,6 +385,33 @@
       });
     }
 
+    function updateTurnOrderDisplay() {
+      const c = document.getElementById('turnOrderDisplay');
+      c.innerHTML = '';
+      
+      if (!gameState.turnOrder || gameState.turnOrder.length === 0) {
+        c.innerHTML = '<div style="color:#888; font-style:italic;">No turn order set. Click "Set Turn Order" above.</div>';
+        return;
+      }
+      
+      const currentPlayer = gameState.currentTurnIndex >= 0 ? gameState.turnOrder[gameState.currentTurnIndex] : null;
+      
+      gameState.turnOrder.forEach((name, idx) => {
+        const div = document.createElement('div');
+        div.className = 'turn-item' + (name === currentPlayer ? ' active' : '');
+        div.textContent = `${idx + 1}. ${name}${name === currentPlayer ? ' ◀ CURRENT TURN' : ''}`;
+        div.onclick = () => setCurrentTurn(name);
+        c.appendChild(div);
+      });
+      
+      if (currentPlayer === null) {
+        const info = document.createElement('div');
+        info.style.cssText = 'color:#888; font-style:italic; margin-top:10px;';
+        info.textContent = 'Turn mode stopped. Click "Start Turns" to begin or click a player name to give them the turn.';
+        c.appendChild(info);
+      }
+    }
+
     function updateOrderBook() {
       const container = document.getElementById('orderBookDisplay');
       container.innerHTML = '';
@@ -302,11 +422,14 @@
         const o = asks[i];
         const div = document.createElement('div');
         div.className = 'order-row ask-row' + (o.player===myName ? ' my-order' : '');
-        div.innerHTML = `<div class="ask-price">${o.price.toFixed(2)}</div><div>${o.size}</div><div>${o.player}</div>`;
+        div.style.cursor = 'pointer';
+        div.title = `Click to cancel order #${o.id}`;
+        div.innerHTML = `<div class="ask-price">${o.price}</div><div>${o.size}</div><div>${o.player}</div>`;
+        div.onclick = () => cancelOrder(o.id);
         container.appendChild(div);
       }
       const { bestBid, bestAsk } = getBestBidAsk();
-      const spread = (bestBid!=null && bestAsk!=null) ? (bestAsk - bestBid).toFixed(2) : 'N/A';
+      const spread = (bestBid!=null && bestAsk!=null) ? (bestAsk - bestBid) : 'N/A';
       const spreadDiv = document.createElement('div');
       spreadDiv.className = 'spread-row';
       spreadDiv.textContent = `--- Spread: ${spread} ---`;
@@ -314,37 +437,206 @@
       for (const o of bids) {
         const div = document.createElement('div');
         div.className = 'order-row bid-row' + (o.player===myName ? ' my-order' : '');
-        div.innerHTML = `<div class="bid-price">${o.price.toFixed(2)}</div><div>${o.size}</div><div>${o.player}</div>`;
+        div.style.cursor = 'pointer';
+        div.title = `Click to cancel order #${o.id}`;
+        div.innerHTML = `<div class="bid-price">${o.price}</div><div>${o.size}</div><div>${o.player}</div>`;
+        div.onclick = () => cancelOrder(o.id);
         container.appendChild(div);
       }
       if (gameState.orders.length===0) container.innerHTML = '<div class="spread-row">No orders in book</div>';
     }
 
-    function calculatePnL(name) {
-      const pos = gameState.positions[name]; if (!pos) return { realized:0, unrealized:0, total:0 };
-      const realized = pos.realizedPnL; let unrealized = 0;
-      if (pos.quantity !== 0 && gameState.settledPrice !== null) {
-        const avgPrice = pos.quantity > 0 ? pos.totalCost/pos.quantity : -pos.totalCost/Math.abs(pos.quantity);
-        unrealized = pos.quantity * (gameState.settledPrice - avgPrice);
+    function drawPriceChart() {
+      const canvas = document.getElementById('priceChart');
+      const ctx = canvas.getContext('2d');
+      const width = canvas.width;
+      const height = canvas.height;
+      
+      // Clear canvas
+      ctx.clearRect(0, 0, width, height);
+      
+      if (!gameState.priceHistory || gameState.priceHistory.length === 0) {
+        ctx.fillStyle = '#888';
+        ctx.font = '16px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText('No price history yet', width/2, height/2);
+        return;
       }
-      return { realized, unrealized, total: realized + unrealized };
+      
+      // Filter out null prices for scaling
+      const validPrices = gameState.priceHistory.filter(p => p.midPrice !== null).map(p => p.midPrice);
+      if (validPrices.length === 0) {
+        ctx.fillStyle = '#888';
+        ctx.font = '16px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText('No valid prices yet', width/2, height/2);
+        return;
+      }
+      
+      const minPrice = Math.min(...validPrices);
+      const maxPrice = Math.max(...validPrices);
+      const priceRange = maxPrice - minPrice || 1;
+      const padding = 50;
+      const chartWidth = width - 2 * padding;
+      const chartHeight = height - 2 * padding;
+      
+      // Draw axes
+      ctx.strokeStyle = '#0f3460';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(padding, padding);
+      ctx.lineTo(padding, height - padding);
+      ctx.lineTo(width - padding, height - padding);
+      ctx.stroke();
+      
+      // Draw grid lines and Y-axis labels
+      ctx.strokeStyle = '#0f3460';
+      ctx.lineWidth = 1;
+      ctx.fillStyle = '#888';
+      ctx.font = '12px Courier New';
+      ctx.textAlign = 'right';
+      const numYTicks = 5;
+      for (let i = 0; i <= numYTicks; i++) {
+        const priceVal = minPrice + (priceRange * i / numYTicks);
+        const y = height - padding - (chartHeight * i / numYTicks);
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(width - padding, y);
+        ctx.stroke();
+        ctx.fillText(priceVal.toFixed(1), padding - 10, y + 4);
+      }
+      
+      // Draw X-axis labels
+      ctx.textAlign = 'center';
+      const numXTicks = Math.min(10, gameState.priceHistory.length);
+      for (let i = 0; i < numXTicks; i++) {
+        const idx = Math.floor(i * (gameState.priceHistory.length - 1) / (numXTicks - 1));
+        const turn = gameState.priceHistory[idx].turn;
+        const x = padding + (chartWidth * idx / (gameState.priceHistory.length - 1));
+        ctx.fillText(turn, x, height - padding + 20);
+      }
+      
+      // Draw axis labels
+      ctx.fillStyle = '#00d4ff';
+      ctx.font = 'bold 14px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('Turn', width / 2, height - 10);
+      ctx.save();
+      ctx.translate(15, height / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText('Midprice', 0, 0);
+      ctx.restore();
+      
+      // Draw line chart
+      ctx.strokeStyle = '#00d4ff';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      let firstPoint = true;
+      for (let i = 0; i < gameState.priceHistory.length; i++) {
+        const p = gameState.priceHistory[i];
+        if (p.midPrice !== null) {
+          const x = padding + (chartWidth * i / (gameState.priceHistory.length - 1));
+          const y = height - padding - ((p.midPrice - minPrice) / priceRange * chartHeight);
+          if (firstPoint) {
+            ctx.moveTo(x, y);
+            firstPoint = false;
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+      }
+      ctx.stroke();
+      
+      // Draw data points
+      ctx.fillStyle = '#00ff64';
+      for (let i = 0; i < gameState.priceHistory.length; i++) {
+        const p = gameState.priceHistory[i];
+        if (p.midPrice !== null) {
+          const x = padding + (chartWidth * i / (gameState.priceHistory.length - 1));
+          const y = height - padding - ((p.midPrice - minPrice) / priceRange * chartHeight);
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+      }
+    }
+
+    function getMidPrice() {
+      const { bestBid, bestAsk } = getBestBidAsk();
+      if (bestBid !== null && bestAsk !== null) {
+        return (bestBid + bestAsk) / 2;
+      }
+      return null;
+    }
+
+    function calculatePnL(name) {
+      const pos = gameState.positions[name]; 
+      if (!pos) return { realized: 0, mtm: 0, total: 0, cash: 0 };
+      
+      const realized = pos.realizedPnL ?? 0;
+      const cash = pos.cash ?? 0;
+      let mtm = 0;
+      let total = 0;
+      
+      // Mark-to-market using mid-price if available, otherwise settled price
+      if (pos.quantity !== 0) {
+        const markPrice = gameState.settledPrice !== null ? gameState.settledPrice : getMidPrice();
+        if (markPrice !== null) {
+          const avgPrice = pos.quantity > 0 ? pos.totalCost / pos.quantity : -pos.totalCost / Math.abs(pos.quantity);
+          mtm = pos.quantity * (markPrice - avgPrice);
+        }
+      }
+      
+      // Total P&L only shows realized P&L when contract is settled
+      if (gameState.settledPrice !== null) {
+        total = realized;
+      }
+      
+      return { realized, mtm, total, cash };
     }
 
     function updatePositionsTable() {
       const c = document.getElementById('positionsTable');
-      c.innerHTML = `<div class="position-row position-header"><div>Player</div><div>Position</div><div>P&L</div></div>`;
-      Object.keys(gameState.positions).forEach(name => {
+      const midPrice = getMidPrice();
+      const midPriceDisplay = midPrice !== null ? midPrice.toFixed(2) : 'N/A';
+      c.innerHTML = `<div class="info-box" style="font-size:0.9em; margin-bottom:10px;">Mid-Price: <strong>${midPriceDisplay}</strong></div>
+                     <div class="position-row position-header"><div>Player</div><div>Position</div><div>Cash</div><div>MtM P&L</div><div>Total P&L</div></div>`;
+      
+      const positionsList = Object.keys(gameState.positions);
+      if (positionsList.length === 0) {
+        c.innerHTML += '<div class="info-box">No positions yet. Submit orders to create positions.</div>';
+        return;
+      }
+      
+      // If settled, sort by cash (descending) for ranking
+      if (gameState.settledPrice !== null) {
+        positionsList.sort((a, b) => {
+          const cashA = gameState.positions[a].cash ?? 0;
+          const cashB = gameState.positions[b].cash ?? 0;
+          return cashB - cashA; // Descending order
+        });
+      }
+      
+      positionsList.forEach((name, index) => {
         const pos = gameState.positions[name];
         const pnl = calculatePnL(name);
         const div = document.createElement('div');
         div.className = 'position-row';
-        div.innerHTML = `<div>${name}</div><div>${pos.quantity}</div><div class="${pnl.total>=0?'profit':'loss'}">$${pnl.total.toFixed(2)}</div>`;
+        
+        // Add rank if settled
+        const rankDisplay = gameState.settledPrice !== null ? `#${index + 1} ` : '';
+        const rankEmoji = index === 0 && gameState.settledPrice !== null ? '🏆 ' : '';
+        
+        div.innerHTML = `<div>${rankEmoji}${rankDisplay}${name}</div><div>${pos.quantity}</div><div class="${pnl.cash>=0?'profit':'loss'}">$${pnl.cash.toFixed(2)}</div><div class="${pnl.mtm>=0?'profit':'loss'}">$${pnl.mtm.toFixed(2)}</div><div class="${pnl.total>=0?'profit':'loss'}">$${pnl.total.toFixed(2)}</div>`;
         c.appendChild(div);
       });
+      
       if (gameState.settledPrice !== null) {
         const info = document.createElement('div');
         info.className = 'info-box';
-        info.innerHTML = `<strong>Contract Settled at ${gameState.settledPrice}</strong> (sum of all sibling counts)`;
+        info.style.marginTop = '15px';
+        info.innerHTML = `<strong>🎯 Contract Settled at ${gameState.settledPrice}</strong> (sum of all sibling counts)<br><br>
+                          <strong>🏆 Final Rankings:</strong> Players ranked by final cash balance. Winner has the most cash!`;
         c.appendChild(info);
       }
     }

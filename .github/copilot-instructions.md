@@ -74,19 +74,33 @@ The entire application lives in `index.html` with embedded styles and JavaScript
   - Admin: `admin-remote.html` (served at `/admin`)
     - CSV bulk import: accepts `name,sibling_count` format (auto-detects headers)
     - Manual single player addition
+    - Turn order management (set, start, stop, click-to-assign)
     - Requires admin token (generated on server startup)
   - Client: `client-remote.html` (served at `/client`)
     - Order size fixed at 1 contract (hardcoded)
     - Players can only specify order type and price
+    - Turn indicator shows current turn and disables buttons when not active player
 - API surface (JSON):
   - `GET /api/state` → full `gameState`
   - `GET /api/events` (SSE) → pushes `{ type: 'state', state }` on every change
   - `POST /api/addPlayer { name, count }` (public - allows self-registration)
   - `POST /api/toggleReveal { name }` (requires admin token)
-  - `POST /api/submitOrder { playerName, side, price, size }` (applies tighten-or-trade, matches, updates positions)
-  - `POST /api/cancelOrders { playerName }`
+  - `POST /api/submitOrder { playerName, side, price, size }` (checks turn, applies tighten-or-trade, matches, updates positions, auto-advances turn)
+  - `POST /api/cancelOrders { playerName }` (checks turn, cancels orders, auto-advances turn)
   - `POST /api/reset {}` (requires admin token)
   - `POST /api/settle {}` (requires admin token)
+  - `POST /api/setTurnOrder { turnOrder }` (requires admin token - set player sequence)
+  - `POST /api/setCurrentTurn { playerName }` (requires admin token - manually assign turn)
+  - `POST /api/startTurns {}` (requires admin token - set currentTurnIndex to 0)
+  - `POST /api/stopTurns {}` (requires admin token - set currentTurnIndex to -1, disable turn mode)
+- Turn-based mode:
+  - `gameState.turnOrder`: Array of player names defining turn sequence
+  - `gameState.currentTurnIndex`: Index in turnOrder (-1 = turn mode disabled)
+  - Only the current player can submit/cancel orders when turn mode is active
+  - Turn auto-advances after successful order submission or cancellation
+  - Admin can click player name to give them the turn immediately
+  - Client UI shows turn indicator (green pulsing when it's your turn, red when waiting)
+  - Client buttons disabled when not active player
 - Source of truth moves from `localStorage` to the server. Clients subscribe to `/api/events` and re-render on each state push.
 - Server binds to `0.0.0.0` for remote access; port configurable via `--port` flag or `PORT` env var
 

@@ -1,0 +1,11 @@
+
+============================================================
+ADMIN TOKEN (save this for admin UI):
+186a18e338634796997511fa3322c7c1
+============================================================
+
+Order Book Game server running on http://0.0.0.0:8080
+Admin UI:  http://localhost:8080/admin
+Client UI: http://localhost:8080/client
+
+For remote access, use your server's IP or domain instead of localhost
