@@ -341,8 +341,9 @@ const server = http.createServer(async (req, res) => {
   notFound(res);
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Order Book Game server running on http://0.0.0.0:${PORT}`);
   console.log(`Admin UI:  http://localhost:${PORT}/admin`);
   console.log(`Client UI: http://localhost:${PORT}/client`);
+  console.log(`\nFor remote access, use your server's IP or domain instead of localhost`);
 });

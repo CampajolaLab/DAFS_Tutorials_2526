@@ -72,17 +72,23 @@ The entire application lives in `index.html` with embedded styles and JavaScript
 - Minimal Node.js server in `server/server.js` keeps a shared in-memory game state and broadcasts updates via SSE
 - UIs:
   - Admin: `admin-remote.html` (served at `/admin`)
+    - CSV bulk import: accepts `name,sibling_count` format (auto-detects headers)
+    - Manual single player addition
+    - Requires admin token (generated on server startup)
   - Client: `client-remote.html` (served at `/client`)
+    - Order size fixed at 1 contract (hardcoded)
+    - Players can only specify order type and price
 - API surface (JSON):
   - `GET /api/state` → full `gameState`
   - `GET /api/events` (SSE) → pushes `{ type: 'state', state }` on every change
-  - `POST /api/addPlayer { name, count }`
-  - `POST /api/toggleReveal { name }`
+  - `POST /api/addPlayer { name, count }` (requires admin token)
+  - `POST /api/toggleReveal { name }` (requires admin token)
   - `POST /api/submitOrder { playerName, side, price, size }` (applies tighten-or-trade, matches, updates positions)
   - `POST /api/cancelOrders { playerName }`
-  - `POST /api/reset {}`
-  - `POST /api/settle {}`
+  - `POST /api/reset {}` (requires admin token)
+  - `POST /api/settle {}` (requires admin token)
 - Source of truth moves from `localStorage` to the server. Clients subscribe to `/api/events` and re-render on each state push.
+- Server binds to `0.0.0.0` for remote access; port configurable via `--port` flag or `PORT` env var
 
 ### Debugging
 - All state in `localStorage.getItem('orderBookGame')`

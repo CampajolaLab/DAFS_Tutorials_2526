@@ -57,7 +57,7 @@
       <div class="input-group"><label>Your Name:</label><input type="text" id="myPlayerName" placeholder="Enter your name"></div>
       <div class="input-group"><label>Order Type:</label><select id="orderType"><option value="bid">Bid (Buy)</option><option value="ask">Ask (Sell)</option></select></div>
       <div class="input-group"><label>Price:</label><input type="number" id="orderPrice" step="0.01" placeholder="Order price"></div>
-      <div class="input-group"><label>Size:</label><input type="number" id="orderSize" min="1" value="1" placeholder="Order size"></div>
+      <div class="info-box" style="font-size:0.9em; margin:10px 0;">Order size is fixed at <strong>1 contract</strong></div>
       <button onclick="submitOrder()">📤 Submit Order</button>
       <button onclick="cancelMyOrders()" class="cancel-btn">❌ Cancel My Orders</button>
     </div>
@@ -102,14 +102,13 @@
       const playerName = document.getElementById('myPlayerName').value.trim();
       const side = document.getElementById('orderType').value;
       const price = parseFloat(document.getElementById('orderPrice').value);
-      const size = parseInt(document.getElementById('orderSize').value);
+      const size = 1; // Fixed size of 1 contract
       if (!playerName) return showMessage('Please enter your name','error');
       if (!Number.isFinite(price) || price <= 0) return showMessage('Please enter a valid price','error');
-      if (!Number.isInteger(size) || size <= 0) return showMessage('Please enter a valid size','error');
       try { const r = await api('/api/submitOrder','POST',{ playerName, side, price, size });
         if ((r.trades||[]).length) showMessage(`Order executed! ${r.trades.length} trade(s)`,'success');
         else showMessage(`Order placed in book at ${price.toFixed(2)}`,'success');
-        document.getElementById('orderPrice').value=''; document.getElementById('orderSize').value='';
+        document.getElementById('orderPrice').value='';
       } catch(e){
         if (e && e.error === 'Tighten or trade') {
           const bb = e.bestBid!=null ? e.bestBid.toFixed(2) : 'N/A';

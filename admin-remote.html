@@ -47,16 +47,27 @@
     <h1>📊 Order Book Trading Game — Admin (Remote)</h1>
     <div id="message"></div>
     <div class="main-grid">
-      <div class="panel">
-        <h2>🔧 Admin Panel</h2>
-        <div class="info-box"><strong>Server-backed:</strong> All changes are saved on the server and pushed to clients in real-time.</div>
-        <div class="input-group"><label>Player Name:</label><input type="text" id="playerName" placeholder="Enter player name"></div>
-        <div class="input-group"><label>Sibling Count:</label><input type="number" id="siblingCount" min="0" placeholder="Number of siblings"></div>
-        <button onclick="addPlayer()">➕ Add Player</button>
-        <button onclick="resetGame()">🔄 Reset Game</button>
-        <button onclick="settleContract()">💰 Settle Contract</button>
-        <div class="sibling-list" id="siblingList"></div>
-      </div>
+                  <div class="panel">
+                <h2>🔧 Admin Panel</h2>
+                <div class="info-box"><strong>Server-backed:</strong> All changes are saved on the server and pushed to clients in real-time.</div>
+                
+                <h3 style="color:#00d4ff; margin-top:20px; margin-bottom:10px; font-size:1.1em;">Import from CSV</h3>
+                <div class="input-group">
+                    <label>Upload CSV File (name, sibling_count):</label>
+                    <input type="file" id="csvFile" accept=".csv,text/csv" style="padding:8px;">
+                </div>
+                <button onclick="uploadCSV()">📂 Import Players from CSV</button>
+                
+                <h3 style="color:#00d4ff; margin-top:20px; margin-bottom:10px; font-size:1.1em;">Add Single Player</h3>
+                <div class="input-group"><label>Player Name:</label><input type="text" id="playerName" placeholder="Enter player name"></div>
+                <div class="input-group"><label>Sibling Count:</label><input type="number" id="siblingCount" min="0" placeholder="Number of siblings"></div>
+                <button onclick="addPlayer()">➕ Add Player</button>
+                
+                <h3 style="color:#00d4ff; margin-top:20px; margin-bottom:10px; font-size:1.1em;">Game Controls</h3>
+                <button onclick="resetGame()">🔄 Reset Game</button>
+                <button onclick="settleContract()">💰 Settle Contract</button>
+                <div class="sibling-list" id="siblingList"></div>
+            </div>
       <div class="panel">
         <h2>📖 Order Book</h2>
         <div class="info-box"><strong>Rule:</strong> You must either improve the best bid/offer or trade against existing orders.</div>
@@ -138,6 +149,68 @@
         if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
         showMessage(e.error || 'Error adding player','error'); 
       }
+    }
+
+    async function uploadCSV() {
+      const fileInput = document.getElementById('csvFile');
+      const file = fileInput.files[0];
+      if (!file) return showMessage('Please select a CSV file','error');
+      
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const text = e.target.result;
+          const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+          
+          let successCount = 0;
+          let errorCount = 0;
+          
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            // Skip header row if it looks like a header
+            if (i === 0 && (line.toLowerCase().includes('name') || line.toLowerCase().includes('player'))) {
+              continue;
+            }
+            
+            const parts = line.split(',').map(p => p.trim());
+            if (parts.length < 2) {
+              console.warn(`Skipping invalid line ${i+1}: ${line}`);
+              errorCount++;
+              continue;
+            }
+            
+            const name = parts[0];
+            const count = parseInt(parts[1]);
+            
+            if (!name || isNaN(count) || count < 0) {
+              console.warn(`Skipping invalid data on line ${i+1}: ${line}`);
+              errorCount++;
+              continue;
+            }
+            
+            try {
+              await api('/api/addPlayer','POST',{name, count});
+              successCount++;
+            } catch (e) {
+              if (e.error && e.error.includes('Unauthorized')) { 
+                promptForToken(); 
+                showMessage('Authentication required. Please try again after entering token.','error');
+                return; 
+              }
+              console.error(`Error adding player ${name}:`, e);
+              errorCount++;
+            }
+          }
+          
+          showMessage(`CSV import complete! Added: ${successCount}, Errors: ${errorCount}`,'success');
+          fileInput.value = ''; // Clear file input
+        } catch (e) {
+          showMessage('Error parsing CSV file: ' + e.message,'error');
+        }
+      };
+      
+      reader.onerror = () => showMessage('Error reading file','error');
+      reader.readAsText(file);
     }
 
     async function resetGame() {

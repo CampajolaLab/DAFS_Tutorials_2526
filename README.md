@@ -31,6 +31,22 @@ Quick start on a machine with Node.js installed:
    - http://<server-host>:8080/client
    - Players don't need the admin token (they can only submit/cancel orders)
 
+**CSV Bulk Import:**
+The admin UI supports importing multiple players from a CSV file. Format:
+```csv
+name,sibling_count
+Alice,2
+Bob,3
+Charlie,1
+```
+- First row can be a header (will be auto-detected and skipped)
+- Each subsequent row: player name, sibling count (comma-separated)
+- See `sample_players.csv` for an example
+
+**Player Order Constraints:**
+- Client UI automatically fixes order size to **1 contract** per order
+- Players can only specify order type (bid/ask) and price
+
 Notes
 - **Security:** Admin endpoints (add player, toggle reveal, reset, settle) require the admin token via `Authorization: Bearer <token>` header
 - **Port selection:** Default is 8080; override with `--port` flag or `PORT` environment variable
