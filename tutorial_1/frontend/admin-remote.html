@@ -80,6 +80,7 @@
           <h3 style="color:#00d4ff; margin-top:20px; margin-bottom:10px; font-size:1.1em;">Turn Order</h3>
           <div class="info-box">Click a player to give them the turn. Drag to reorder (not yet implemented - use buttons to set order).</div>
           <button onclick="autoSetTurnOrder()">📋 Set Turn Order (All Players)</button>
+          <button onclick="randomizeTurnOrder()">🎲 Randomize Turn Order</button>
           <button onclick="startTurns()">▶️ Start Turns</button>
           <button onclick="stopTurns()">⏹️ Stop Turn Mode</button>
           <div id="turnOrderDisplay" style="margin-top:15px;"></div>
@@ -324,6 +325,26 @@
       } catch(e){
         if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
         showMessage(e.error || 'Error setting turn order','error');
+      }
+    }
+
+    async function randomizeTurnOrder() {
+      const playerNames = Object.keys(gameState.players || {});
+      if (playerNames.length === 0) return showMessage('No players to randomize','error');
+      
+      // Fisher-Yates shuffle
+      const shuffled = [...playerNames];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      
+      try {
+        await api('/api/setTurnOrder','POST',{ turnOrder: shuffled });
+        showMessage(`Turn order randomized for ${shuffled.length} players`,'success');
+      } catch(e){
+        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        showMessage(e.error || 'Error randomizing turn order','error');
       }
     }
 
