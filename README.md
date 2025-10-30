@@ -4,7 +4,7 @@
 
 An interactive educational tool for teaching limit order book mechanics.
 
-**[Open the Game](index.html)** | **[Read the Instructions](ORDER_BOOK_GAME.md)**
+***[Read the Instructions](ORDER_BOOK_GAME.md)**
 
 ### Online (Server) Mode
 This repo now includes an optional tiny Node.js server for multi-user play over the internet. It keeps a shared in-memory game state and pushes updates to all connected clients in real-time via Server-Sent Events.
