@@ -257,8 +257,13 @@ const server = http.createServer(async (req, res) => {
 
   // Static files
   if (req.method === 'GET' && (pathname === '/' || pathname === '/admin' || pathname === '/client')) {
-    const file = pathname === '/client' ? 'client-remote.html' : 'admin-remote.html';
-    const filePath = path.join(__dirname, '..', file);
+    let file;
+    if (pathname === '/' || pathname === '/admin') {
+      file = 'admin-remote.html';
+    } else {
+      file = 'client-remote.html';
+    }
+    const filePath = path.join(__dirname, '..', 'frontend', file);
     fs.readFile(filePath, (err, data) => {
       if (err) return notFound(res);
       res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' });
@@ -269,7 +274,7 @@ const server = http.createServer(async (req, res) => {
 
   // Serve other assets if needed
   if (req.method === 'GET' && pathname.endsWith('.html')) {
-    const filePath = path.join(__dirname, '..', pathname);
+    const filePath = path.join(__dirname, '..', 'frontend', pathname);
     fs.readFile(filePath, (err, data) => {
       if (err) return notFound(res);
       res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' });
