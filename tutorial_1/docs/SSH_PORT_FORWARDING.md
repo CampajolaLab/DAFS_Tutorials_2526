@@ -3,8 +3,6 @@
 
 To access the Order Book Game server running on the university network, you need to use SSH port forwarding. This allows you to securely connect to the game server from your own computer, even if the server is not directly accessible from outside the campus network.
 
-**Replace `account@server` with your assigned username and the server's address. The server runs on port 8888.**
-
 ---
 
 ## 1. Windows
@@ -24,7 +22,7 @@ To access the Order Book Game server running on the university network, you need
 
 ### Using PuTTY
 1. Download and open [PuTTY](https://www.putty.org/).
-2. Enter `account@server` in the Host Name field.
+2. Enter `ifte24_students@ift-severn.cege.ucl.ac.uk` in the Host Name field.
 3. In the left menu, go to **Connection > SSH > Tunnels**.
 4. In **Source port**, enter `8888`. In **Destination**, enter `localhost:8888`.
 5. Click **Add**.
@@ -39,7 +37,7 @@ To access the Order Book Game server running on the university network, you need
 1. Open the Terminal app.
 2. Run:
    ```sh
-   ssh -N -f -L 8888:localhost:8888 account@server
+   ssh -N -f -L 8888:localhost:8888 ifte24_students@ift-severn.cege.ucl.ac.uk
    ```
    - `-N` means do not execute remote commands (just forward ports)
    - `-f` puts ssh in the background after authentication
@@ -54,7 +52,7 @@ To access the Order Book Game server running on the university network, you need
 1. Open a terminal window.
 2. Run:
    ```sh
-   ssh -N -f -L 8888:localhost:8888 account@server
+   ssh -N -f -L 8888:localhost:8888 ifte24_students@ift-severn.cege.ucl.ac.uk
    ```
    - `-N` means do not execute remote commands (just forward ports)
    - `-f` puts ssh in the background after authentication
