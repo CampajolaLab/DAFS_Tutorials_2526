@@ -106,19 +106,53 @@
 
       <div class="panel">
         <h2>🎛️ Trading</h2>
+        
+        <!-- Order Mode Selection -->
         <div class="input-group">
-          <label>Order Type:</label>
-          <select id="orderType">
-            <option value="bid">Bid (Buy)</option>
-            <option value="ask">Ask (Sell)</option>
+          <label>Order Mode:</label>
+          <select id="orderMode" onchange="toggleOrderMode()">
+            <option value="limit">Limit Order</option>
+            <option value="market">Market Order</option>
           </select>
         </div>
-        <div class="input-group">
-          <label>Price:</label>
-          <input type="number" id="orderPrice" step="1" min="1" placeholder="Order price (integer only)">
+        
+        <!-- Limit Order Form -->
+        <div id="limitOrderForm">
+          <div class="input-group">
+            <label>Side:</label>
+            <select id="limitSide">
+              <option value="bid">Bid (Buy)</option>
+              <option value="ask">Ask (Sell)</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Price:</label>
+            <input type="number" id="limitPrice" step="1" min="1" placeholder="Order price (integer only)">
+          </div>
+          <div class="input-group">
+            <label>Size:</label>
+            <input type="number" id="limitSize" step="1" min="1" value="1" placeholder="Order size (contracts)">
+          </div>
+          <div class="info-box" style="font-size:0.9em; margin:10px 0;"><strong>Limit Order:</strong> Must tighten the spread or cross it to trade</div>
+          <button id="submitLimitBtn" onclick="submitLimitOrder()">📤 Submit Limit Order</button>
         </div>
-        <div class="info-box" style="font-size:0.9em; margin:10px 0;">Order size is fixed at <strong>1 contract</strong></div>
-        <button id="submitBtn" onclick="submitOrder()">📤 Submit Order</button>
+        
+        <!-- Market Order Form -->
+        <div id="marketOrderForm" class="is-hidden">
+          <div class="input-group">
+            <label>Direction:</label>
+            <select id="marketSide">
+              <option value="bid">Buy</option>
+              <option value="ask">Sell</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Size:</label>
+            <input type="number" id="marketSize" step="1" min="1" value="1" placeholder="Order size (contracts)">
+          </div>
+          <div class="info-box" style="font-size:0.9em; margin:10px 0;"><strong>Market Order:</strong> Executes immediately against available limit orders at best prices</div>
+          <button id="submitMarketBtn" onclick="submitMarketOrder()">⚡ Submit Market Order</button>
+        </div>
       </div>
 
       <div class="panel">
@@ -246,6 +280,67 @@
         }
       }
       lastKnownSettledPrice = gameState.settledPrice;
+    }
+
+    function toggleOrderMode() {
+      const mode = document.getElementById('orderMode').value;
+      const limitForm = document.getElementById('limitOrderForm');
+      const marketForm = document.getElementById('marketOrderForm');
+      if (mode === 'limit') {
+        limitForm.classList.remove('is-hidden');
+        marketForm.classList.add('is-hidden');
+      } else {
+        limitForm.classList.add('is-hidden');
+        marketForm.classList.remove('is-hidden');
+      }
+    }
+
+    async function submitLimitOrder() {
+      if (!myPlayerName) return showMessage('Please login first','error');
+      const side = document.getElementById('limitSide').value;
+      const price = parseFloat(document.getElementById('limitPrice').value);
+      const size = parseInt(document.getElementById('limitSize').value);
+      if (!Number.isFinite(price) || price <= 0) return showMessage('Please enter a valid price','error');
+      if (!Number.isInteger(price)) return showMessage('Price must be an integer','error');
+      if (!Number.isInteger(size) || size <= 0) return showMessage('Please enter a valid size','error');
+      try { 
+        const r = await api('/api/submitOrder','POST',{ playerName: myPlayerName, side, price, size, orderType: 'limit' });
+        if ((r.trades||[]).length) showMessage(`Order executed! ${r.trades.length} trade(s)`,'success');
+        else showMessage(`Limit order placed in book at ${price}`,'success');
+        document.getElementById('limitPrice').value='';
+        document.getElementById('limitSize').value='1';
+      } catch(e){
+        if (e && e.error === 'Not your turn') {
+          showMessage(`Not your turn! Wait for ${e.currentPlayer || 'your turn'}`,'error');
+        } else if (e && e.error === 'Tighten or trade') {
+          const bb = e.bestBid!=null ? e.bestBid : 'N/A';
+          const ba = e.bestAsk!=null ? e.bestAsk : 'N/A';
+          showMessage(`Order rejected! Improve best ${side} or trade. Best bid: ${bb}, Best ask: ${ba}`,'error');
+        } else showMessage(e.error || 'Error submitting order','error');
+      }
+    }
+
+    async function submitMarketOrder() {
+      if (!myPlayerName) return showMessage('Please login first','error');
+      const side = document.getElementById('marketSide').value;
+      const size = parseInt(document.getElementById('marketSize').value);
+      if (!Number.isInteger(size) || size <= 0) return showMessage('Please enter a valid size','error');
+      try { 
+        const r = await api('/api/submitOrder','POST',{ playerName: myPlayerName, side, size, orderType: 'market' });
+        if ((r.trades||[]).length) {
+          const totalQty = r.trades.reduce((sum, t) => sum + t.size, 0);
+          showMessage(`Market order executed! ${r.trades.length} trade(s), total ${totalQty} contracts`,'success');
+        } else {
+          showMessage('Market order could not be filled - no liquidity','error');
+        }
+        document.getElementById('marketSize').value='1';
+      } catch(e){
+        if (e && e.error === 'Not your turn') {
+          showMessage(`Not your turn! Wait for ${e.currentPlayer || 'your turn'}`,'error');
+        } else if (e && e.error && e.error.includes('Insufficient liquidity')) {
+          showMessage(e.error,'error');
+        } else showMessage(e.error || 'Error submitting market order','error');
+      }
     }
 
     async function submitOrder() {

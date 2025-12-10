@@ -219,6 +219,47 @@ function matchOrders(newOrder) {
   return trades;
 }
 
+function executeMarketOrder(playerName, side, size) {
+  // Market order: execute against all available limit orders until filled or no liquidity
+  const trades = [];
+  let remaining = size;
+  
+  // Get opposite side orders sorted by best price
+  const opposite = gameState.orders
+    .filter(o => o.side !== side)
+    .sort((a, b) => {
+      if (side === 'bid') return a.price - b.price || a.id - b.id; // best ask first for buy
+      return b.price - a.price || a.id - b.id; // best bid first for sell
+    });
+
+  for (const order of opposite) {
+    if (remaining <= 0) break;
+    const tradeSize = Math.min(remaining, order.size);
+    const tradePrice = order.price; // passive price
+    const trade = {
+      id: gameState.trades.length + 1,
+      buyer: side === 'bid' ? playerName : order.player,
+      seller: side === 'bid' ? order.player : playerName,
+      price: tradePrice,
+      size: tradeSize,
+      timestamp: Date.now(),
+    };
+    trades.push(trade);
+    gameState.trades.push(trade);
+    console.log(`[MARKET TRADE] ${trade.buyer} buys from ${trade.seller} @ ${tradePrice} x ${tradeSize}`);
+    updatePosition(trade.buyer, tradeSize, tradePrice);
+    updatePosition(trade.seller, -tradeSize, tradePrice);
+    console.log(`[POSITIONS] Buyer: ${JSON.stringify(gameState.positions[trade.buyer])}, Seller: ${JSON.stringify(gameState.positions[trade.seller])}`);
+    order.size -= tradeSize;
+    remaining -= tradeSize;
+    if (order.size === 0) {
+      gameState.orders = gameState.orders.filter(o => o.id !== order.id);
+    }
+  }
+
+  return { trades, remaining };
+}
+
 function settleContract() {
   const totalSiblings = Object.values(gameState.players).reduce((sum, p) => sum + p.siblingCount, 0);
   if (totalSiblings === 0) return { error: 'No players added yet' };
@@ -335,11 +376,10 @@ const server = http.createServer(async (req, res) => {
   // API: submit order
   if (req.method === 'POST' && pathname === '/api/submitOrder') {
     try {
-      const { playerName, side, price, size } = await readBody(req);
+      const { playerName, side, price, size, orderType } = await readBody(req);
       if (!playerName || !['bid', 'ask'].includes(side)) return sendJSON(res, 400, { error: 'Invalid side/name' });
-      const p = Number(price), s = Number(size);
-      if (!Number.isFinite(p) || p <= 0 || !Number.isInteger(s) || s <= 0) return sendJSON(res, 400, { error: 'Invalid price/size' });
-      if (!Number.isInteger(p)) return sendJSON(res, 400, { error: 'Price must be an integer' });
+      const s = Number(size);
+      if (!Number.isInteger(s) || s <= 0) return sendJSON(res, 400, { error: 'Invalid size' });
       
       // Check turn-based mode
       if (gameState.turnOrder.length > 0 && gameState.currentTurnIndex >= 0) {
@@ -349,14 +389,39 @@ const server = http.createServer(async (req, res) => {
         }
       }
       
-      // tighten or trade rule
-      if (!canPlaceOrder(side, p)) {
-        const { bestBid, bestAsk } = getBestBidAsk();
-        return sendJSON(res, 400, { error: 'Tighten or trade', bestBid, bestAsk });
-      }
       ensurePosition(playerName);
-      const order = { id: gameState.orderIdCounter++, player: playerName, side, price: p, size: s, timestamp: Date.now() };
-      const trades = matchOrders(order);
+      let trades = [];
+      
+      // Handle market order vs limit order
+      if (orderType === 'market') {
+        // Market order: execute immediately against all available liquidity
+        const result = executeMarketOrder(playerName, side, s);
+        trades = result.trades;
+        
+        if (result.remaining > 0) {
+          // Partial fill or no fill
+          const filled = s - result.remaining;
+          if (filled === 0) {
+            return sendJSON(res, 400, { error: 'Insufficient liquidity - market order could not be filled' });
+          } else {
+            console.log(`[MARKET ORDER] Partial fill: ${filled}/${s} contracts`);
+          }
+        }
+      } else {
+        // Limit order: validate price and apply tighten-or-trade rule
+        const p = Number(price);
+        if (!Number.isFinite(p) || p <= 0) return sendJSON(res, 400, { error: 'Invalid price' });
+        if (!Number.isInteger(p)) return sendJSON(res, 400, { error: 'Price must be an integer' });
+        
+        // tighten or trade rule
+        if (!canPlaceOrder(side, p)) {
+          const { bestBid, bestAsk } = getBestBidAsk();
+          return sendJSON(res, 400, { error: 'Tighten or trade', bestBid, bestAsk });
+        }
+        
+        const order = { id: gameState.orderIdCounter++, player: playerName, side, price: p, size: s, timestamp: Date.now() };
+        trades = matchOrders(order);
+      }
       
       // Advance turn if in turn-based mode
       if (gameState.turnOrder.length > 0 && gameState.currentTurnIndex >= 0) {
