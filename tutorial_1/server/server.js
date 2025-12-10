@@ -296,15 +296,40 @@ function settleContract() {
 const server = http.createServer(async (req, res) => {
   const { pathname } = url.parse(req.url, true);
 
-  // Static files
-  if (req.method === 'GET' && (pathname === '/' || pathname === '/admin' || pathname === '/client')) {
-    let file;
-    if (pathname === '/' || pathname === '/admin') {
-      file = 'admin-remote.html';
-    } else {
-      file = 'client-remote.html';
+  // Static files - Client page (public)
+  if (req.method === 'GET' && (pathname === '/' || pathname === '/client')) {
+    const filePath = path.join(__dirname, '..', 'frontend', 'client-remote.html');
+    fs.readFile(filePath, (err, data) => {
+      if (err) return notFound(res);
+      res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' });
+      res.end(data);
+    });
+    return;
+  }
+
+  // Admin page (token protected)
+  if (req.method === 'GET' && pathname === '/admin') {
+    const { query } = url.parse(req.url, true);
+    const tokenFromQuery = query.token;
+    const authHeader = req.headers['authorization'];
+    const tokenFromHeader = authHeader ? authHeader.replace(/^Bearer\s+/i, '') : null;
+    
+    if (tokenFromQuery !== ADMIN_TOKEN && tokenFromHeader !== ADMIN_TOKEN) {
+      res.writeHead(401, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' });
+      res.end(`<!DOCTYPE html>
+<html><head><title>Admin Access</title>
+<style>body{font-family:'Courier New',monospace;background:#1a1a2e;color:#eee;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}
+.box{background:#16213e;border:2px solid #0f3460;border-radius:8px;padding:40px;text-align:center;max-width:400px;}
+h1{color:#00d4ff;}input{width:100%;padding:12px;margin:15px 0;background:#0f3460;border:1px solid #00d4ff;color:#eee;border-radius:4px;font-size:1em;}
+button{background:#00d4ff;color:#16213e;border:none;padding:12px 24px;font-weight:bold;cursor:pointer;border-radius:4px;font-size:1em;}
+button:hover{background:#00a8cc;}.error{color:#ff3232;margin-top:10px;}</style></head>
+<body><div class="box"><h1>🔐 Admin Access</h1><p>Enter the admin token displayed in the server console:</p>
+<form method="GET" action="/admin"><input type="password" name="token" placeholder="Admin Token" required>
+<button type="submit">Access Admin Panel</button></form></div></body></html>`);
+      return;
     }
-    const filePath = path.join(__dirname, '..', 'frontend', file);
+    
+    const filePath = path.join(__dirname, '..', 'frontend', 'admin-remote.html');
     fs.readFile(filePath, (err, data) => {
       if (err) return notFound(res);
       res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' });
@@ -592,7 +617,8 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Order Book Game server running on http://0.0.0.0:${PORT}`);
-  console.log(`Admin UI:  http://localhost:${PORT}/admin`);
-  console.log(`Client UI: http://localhost:${PORT}/client`);
-  console.log(`\nFor remote access, use your server's IP or domain instead of localhost`);
+  console.log('\n📋 URLs:');
+  console.log(`  Players (public):     /client  or  /`);
+  console.log(`  Admin (token-protected): /admin`);
+  console.log('\n🔐 To access admin, use the token above in the login form or append ?token=<TOKEN> to the URL');
 });

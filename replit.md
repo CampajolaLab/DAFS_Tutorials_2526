@@ -17,14 +17,15 @@ An interactive educational tool for teaching limit order book mechanics and mark
 - Turn-based mode support
 - CSV bulk player import
 
-## How to Run
-The server runs on port 5000 (configured via PORT environment variable).
-- Admin UI: `/admin`
-- Client UI: `/client`
+## URLs
+- **Players (public)**: `/` or `/client` - Anyone can access and join the game
+- **Admin (token-protected)**: `/admin` - Requires admin token to access
 
 ## Configuration
 - PORT: Set via environment variable (default: 5000)
 - Admin token is generated randomly on each server start and displayed in console logs
+- To access admin, either enter the token in the login form or append `?token=<TOKEN>` to the URL
 
 ## Recent Changes
+- 2025-12-10: Added token protection to admin page (requires token to even view the page)
 - 2025-12-10: Configured for Replit environment with port 5000
