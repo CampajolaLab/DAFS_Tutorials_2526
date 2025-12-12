@@ -229,7 +229,7 @@
         document.getElementById('dummySiblingCount').value='0'; 
       }
       catch (e) { 
-        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        
         showMessage(e.error || 'Error adding dummy player','error'); 
       }
     }
@@ -252,7 +252,7 @@
         document.getElementById('dummyOrderSize').value='1'; 
       }
       catch (e) { 
-        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        
         showMessage(e.error || 'Error submitting dummy order','error'); 
       }
     }
@@ -318,7 +318,7 @@
       if (!confirm('Are you sure you want to reset the entire game?')) return;
       try { await api('/api/reset','POST'); showMessage('Game reset!','success'); } 
       catch(e){ 
-        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        
         showMessage(e.error || 'Error resetting','error'); 
       }
     }
@@ -326,7 +326,7 @@
     async function settleContract() {
       try { const r = await api('/api/settle','POST'); showMessage(`Contract settled at ${r.settledPrice}`,'success'); } 
       catch(e){ 
-        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        
         showMessage(e.error || 'Error settling','error'); 
       }
     }
@@ -334,7 +334,7 @@
     async function toggleReveal(name) {
       try { await api('/api/toggleReveal','POST',{ name }); } 
       catch(e){ 
-        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        
         showMessage(e.error || 'Error toggling reveal','error'); 
       }
     }
@@ -374,7 +374,7 @@
         await api('/api/cancelOrder','POST',{ orderId });
         showMessage(`Order #${orderId} cancelled`,'success');
       } catch(e){
-        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        
         showMessage(e.error || 'Error cancelling order','error');
       }
     }
@@ -389,7 +389,7 @@
         await api('/api/setTurnOrder','POST',{ turnOrder: playerNames });
         showMessage(`Turn order set for ${playerNames.length} players`,'success');
       } catch(e){
-        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        
         showMessage(e.error || 'Error setting turn order','error');
       }
     }
@@ -410,7 +410,7 @@
         await api('/api/setTurnOrder','POST',{ turnOrder: shuffled });
         showMessage(`Turn order randomized for ${shuffled.length} players`,'success');
       } catch(e){
-        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        
         showMessage(e.error || 'Error randomizing turn order','error');
       }
     }
@@ -420,7 +420,7 @@
         await api('/api/startTurns','POST');
         showMessage('Turns started!','success');
       } catch(e){
-        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        
         showMessage(e.error || 'Error starting turns','error');
       }
     }
@@ -430,7 +430,7 @@
         await api('/api/stopTurns','POST');
         showMessage('Turn mode stopped','success');
       } catch(e){
-        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        
         showMessage(e.error || 'Error stopping turns','error');
       }
     }
@@ -440,7 +440,7 @@
         await api('/api/setCurrentTurn','POST',{ playerName });
         showMessage(`Turn given to ${playerName}`,'success');
       } catch(e){
-        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        
         showMessage(e.error || 'Error setting turn','error');
       }
     }
