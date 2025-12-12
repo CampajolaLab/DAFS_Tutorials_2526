@@ -158,7 +158,8 @@
       // Admin-specific endpoints require token
       if (adminToken && (path.includes('toggleReveal') || path.includes('reset') || path.includes('settle') 
           || path.includes('setTurnOrder') || path.includes('setCurrentTurn') || path.includes('startTurns') 
-          || path.includes('stopTurns') || path.includes('cancelOrder'))) {
+          || path.includes('stopTurns') || path.includes('cancelOrder') || path.includes('addDummyPlayer')
+          || path.includes('submitDummyOrder'))) {
         headers['Authorization'] = `Bearer ${adminToken}`;
       }
       const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
