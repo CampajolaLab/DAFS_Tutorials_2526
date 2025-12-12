@@ -73,6 +73,30 @@
           <div class="input-group"><label>Sibling Count:</label><input type="number" id="siblingCount" min="0" placeholder="Number of siblings"></div>
           <button onclick="addPlayer()">➕ Add Player</button>
           
+          <h3 style="color:#00d4ff; margin-top:20px; margin-bottom:10px; font-size:1.1em;">Add Dummy Player</h3>
+          <div class="info-box" style="font-size:0.9em;">Dummy players can place limit orders but don't participate in turns</div>
+          <div class="input-group"><label>Dummy Player Name:</label><input type="text" id="dummyPlayerName" placeholder="Enter dummy player name"></div>
+          <div class="input-group"><label>Sibling Count:</label><input type="number" id="dummySiblingCount" min="0" value="0" placeholder="Number of siblings"></div>
+          <button onclick="addDummyPlayer()">🤖 Add Dummy Player</button>
+          
+          <h3 style="color:#00d4ff; margin-top:20px; margin-bottom:10px; font-size:1.1em;">Dummy Player Orders</h3>
+          <div class="input-group">
+            <label>Select Dummy Player:</label>
+            <select id="dummyPlayerSelect">
+              <option value="">-- Select Dummy Player --</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Side:</label>
+            <select id="dummyOrderSide">
+              <option value="bid">Bid (Buy)</option>
+              <option value="ask">Ask (Sell)</option>
+            </select>
+          </div>
+          <div class="input-group"><label>Price:</label><input type="number" id="dummyOrderPrice" step="1" min="1" placeholder="Order price (integer)"></div>
+          <div class="input-group"><label>Size:</label><input type="number" id="dummyOrderSize" step="1" min="1" value="1" placeholder="Order size"></div>
+          <button onclick="submitDummyOrder()">📤 Submit Dummy Order</button>
+          
           <h3 style="color:#00d4ff; margin-top:20px; margin-bottom:10px; font-size:1.1em;">Game Controls</h3>
           <button onclick="resetGame()">🔄 Reset Game</button>
           <button onclick="settleContract()">💰 Settle Contract</button>
@@ -190,6 +214,46 @@
       }
       catch (e) { 
         showMessage(e.error || 'Error adding player','error'); 
+      }
+    }
+
+    async function addDummyPlayer() {
+      const name = document.getElementById('dummyPlayerName').value.trim();
+      const count = parseInt(document.getElementById('dummySiblingCount').value);
+      if (!name) return showMessage('Please enter a dummy player name','error');
+      if (isNaN(count) || count < 0) return showMessage('Please enter a valid sibling count','error');
+      try { 
+        await api('/api/addDummyPlayer','POST',{name, count}); 
+        showMessage(`Dummy player ${name} added`,'success'); 
+        document.getElementById('dummyPlayerName').value=''; 
+        document.getElementById('dummySiblingCount').value='0'; 
+      }
+      catch (e) { 
+        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        showMessage(e.error || 'Error adding dummy player','error'); 
+      }
+    }
+
+    async function submitDummyOrder() {
+      const playerName = document.getElementById('dummyPlayerSelect').value;
+      const side = document.getElementById('dummyOrderSide').value;
+      const price = parseInt(document.getElementById('dummyOrderPrice').value);
+      const size = parseInt(document.getElementById('dummyOrderSize').value);
+      
+      if (!playerName) return showMessage('Please select a dummy player','error');
+      if (isNaN(price) || price <= 0) return showMessage('Please enter a valid price','error');
+      if (isNaN(size) || size <= 0) return showMessage('Please enter a valid size','error');
+      
+      try { 
+        const r = await api('/api/submitDummyOrder','POST',{playerName, side, price, size}); 
+        if ((r.trades||[]).length) showMessage(`Dummy order executed! ${r.trades.length} trade(s)`,'success');
+        else showMessage(`Dummy order placed in book at ${price}`,'success');
+        document.getElementById('dummyOrderPrice').value=''; 
+        document.getElementById('dummyOrderSize').value='1'; 
+      }
+      catch (e) { 
+        if (e.error && e.error.includes('Unauthorized')) { promptForToken(); return; }
+        showMessage(e.error || 'Error submitting dummy order','error'); 
       }
     }
 
@@ -317,8 +381,10 @@
 
     // Turn management
     async function autoSetTurnOrder() {
-      const playerNames = Object.keys(gameState.players || {}).sort();
-      if (playerNames.length === 0) return showMessage('No players to add to turn order','error');
+      const playerNames = Object.keys(gameState.players || {})
+        .filter(name => !gameState.players[name].isDummy)
+        .sort();
+      if (playerNames.length === 0) return showMessage('No non-dummy players to add to turn order','error');
       try {
         await api('/api/setTurnOrder','POST',{ turnOrder: playerNames });
         showMessage(`Turn order set for ${playerNames.length} players`,'success');
@@ -329,8 +395,9 @@
     }
 
     async function randomizeTurnOrder() {
-      const playerNames = Object.keys(gameState.players || {});
-      if (playerNames.length === 0) return showMessage('No players to randomize','error');
+      const playerNames = Object.keys(gameState.players || {})
+        .filter(name => !gameState.players[name].isDummy);
+      if (playerNames.length === 0) return showMessage('No non-dummy players to randomize','error');
       
       // Fisher-Yates shuffle
       const shuffled = [...playerNames];
@@ -390,6 +457,7 @@
       updateOrderBook();
       updatePositionsTable();
       updateTurnOrderDisplay();
+      updateDummyPlayerSelect();
       drawPriceChart();
     }
 
@@ -400,10 +468,27 @@
         const p = gameState.players[name];
         const div = document.createElement('div');
         div.className = p.revealed ? 'sibling-item' : 'sibling-item sibling-hidden';
-        div.textContent = p.revealed ? `${name}: ${p.siblingCount}` : `${name}: ???`;
+        const dummyLabel = p.isDummy ? ' 🤖' : '';
+        div.textContent = p.revealed ? `${name}: ${p.siblingCount}${dummyLabel}` : `${name}: ???${dummyLabel}`;
         div.onclick = () => toggleReveal(name);
         c.appendChild(div);
       });
+    }
+
+    function updateDummyPlayerSelect() {
+      const select = document.getElementById('dummyPlayerSelect');
+      const currentValue = select.value;
+      select.innerHTML = '<option value="">-- Select Dummy Player --</option>';
+      Object.keys(gameState.players).forEach(name => {
+        const p = gameState.players[name];
+        if (p.isDummy) {
+          const option = document.createElement('option');
+          option.value = name;
+          option.textContent = name;
+          select.appendChild(option);
+        }
+      });
+      if (currentValue) select.value = currentValue;
     }
 
     function updateTurnOrderDisplay() {

@@ -31,7 +31,7 @@ console.log('='.repeat(60) + '\n');
 
 // --- In-memory Game State (same shape as client) ---
 let gameState = {
-  players: {},        // { name: { siblingCount: number, revealed: boolean } }
+  players: {},        // { name: { siblingCount: number, revealed: boolean, isDummy: boolean } }
   orders: [],         // [{ id, player, side: 'bid'|'ask', price:number, size:number, timestamp:number }]
   trades: [],         // [{ id, buyer, seller, price, size, timestamp }]
   positions: {},      // { name: { quantity:number, totalCost:number, realizedPnL:number } }
@@ -373,12 +373,52 @@ button:hover{background:#00a8cc;}.error{color:#ff3232;margin-top:10px;}</style><
   // API: add player (public - no auth required for self-registration)
   if (req.method === 'POST' && pathname === '/api/addPlayer') {
     try {
-      const { name, count } = await readBody(req);
+      const { name, count, isDummy } = await readBody(req);
       if (!name || typeof count !== 'number' || count < 0) return sendJSON(res, 400, { error: 'Invalid input' });
-      gameState.players[name] = { siblingCount: count, revealed: false };
-      if (!gameState.positions[name]) gameState.positions[name] = { quantity: 0, totalCost: 0, realizedPnL: 0 };
+      gameState.players[name] = { siblingCount: count, revealed: false, isDummy: isDummy || false };
+      if (!gameState.positions[name]) gameState.positions[name] = { quantity: 0, totalCost: 0, realizedPnL: 0, cash: 0 };
       version++;
       sendJSON(res, 200, { ok: true });
+      broadcastState();
+    } catch (e) { sendJSON(res, 400, { error: 'Bad JSON' }); }
+    return;
+  }
+
+  // API: add dummy player (admin only - creates a player that doesn't participate in turns)
+  if (req.method === 'POST' && pathname === '/api/addDummyPlayer') {
+    if (!checkAdminAuth(req)) return unauthorized(res);
+    try {
+      const { name, count } = await readBody(req);
+      if (!name || typeof count !== 'number' || count < 0) return sendJSON(res, 400, { error: 'Invalid input' });
+      gameState.players[name] = { siblingCount: count, revealed: false, isDummy: true };
+      if (!gameState.positions[name]) gameState.positions[name] = { quantity: 0, totalCost: 0, realizedPnL: 0, cash: 0 };
+      version++;
+      sendJSON(res, 200, { ok: true });
+      broadcastState();
+    } catch (e) { sendJSON(res, 400, { error: 'Bad JSON' }); }
+    return;
+  }
+
+  // API: submit dummy order (admin only - place limit order for a dummy player)
+  if (req.method === 'POST' && pathname === '/api/submitDummyOrder') {
+    if (!checkAdminAuth(req)) return unauthorized(res);
+    try {
+      const { playerName, side, price, size } = await readBody(req);
+      if (!playerName || !gameState.players[playerName]) return sendJSON(res, 400, { error: 'Player not found' });
+      if (!gameState.players[playerName].isDummy) return sendJSON(res, 400, { error: 'Player is not a dummy player' });
+      if (!['bid', 'ask'].includes(side)) return sendJSON(res, 400, { error: 'Invalid side' });
+      const p = Number(price), s = Number(size);
+      if (!Number.isFinite(p) || p <= 0) return sendJSON(res, 400, { error: 'Invalid price' });
+      if (!Number.isInteger(p)) return sendJSON(res, 400, { error: 'Price must be an integer' });
+      if (!Number.isInteger(s) || s <= 0) return sendJSON(res, 400, { error: 'Invalid size' });
+      
+      // Dummy orders bypass tighten-or-trade rule
+      ensurePosition(playerName);
+      const order = { id: gameState.orderIdCounter++, player: playerName, side, price: p, size: s, timestamp: Date.now() };
+      const trades = matchOrders(order);
+      
+      version++;
+      sendJSON(res, 200, { ok: true, trades });
       broadcastState();
     } catch (e) { sendJSON(res, 400, { error: 'Bad JSON' }); }
     return;
